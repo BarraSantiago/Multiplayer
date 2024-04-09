@@ -18,7 +18,7 @@ public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
     void OnReceiveDataEvent(byte[] data, IPEndPoint ep)
     {
         NetConsole console = new NetConsole();
-        
+
         if (NetworkManager.Instance.isServer)
         {
             NetworkManager.Instance.Broadcast(data);
@@ -32,7 +32,8 @@ public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
         if (inputMessage.text != "")
         {
             NetConsole console = new NetConsole();
-            console.data = inputMessage.text;
+            console.data = str;
+            
             if (NetworkManager.Instance.isServer)
             {
                 NetworkManager.Instance.Broadcast(console.Serialize());
@@ -40,7 +41,6 @@ public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
             }
             else
             {
-                
                 NetworkManager.Instance.SendToServer(console.Serialize());
             }
 
@@ -48,7 +48,5 @@ public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
             inputMessage.Select();
             inputMessage.text = "";
         }
-
     }
-
 }

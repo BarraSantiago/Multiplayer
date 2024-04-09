@@ -105,7 +105,11 @@ public class NetConsole : IMessage<string>
         string outData;
 
         outData = BitConverter.ToString(message, 4);
-
+        for (int i = 0; i < message.Length; i+=4)
+        {
+            outData += (char)message[i];
+        }
+        
         return outData;
     }
 
@@ -120,8 +124,11 @@ public class NetConsole : IMessage<string>
 
         outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
 
-        outData.AddRange(Encoding.ASCII.GetBytes(data));
-        
+        foreach (char letter in data)
+        {
+            outData.Add((byte)letter);
+            
+        }
         return outData.ToArray();
     }
 }
