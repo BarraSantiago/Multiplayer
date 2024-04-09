@@ -94,7 +94,7 @@ public class NetVector3 : IMessage<UnityEngine.Vector3>
 
 public class NetConsole : IMessage<string>
 {
-    private string data;
+    public string data;
 
     public MessageType messageType()
     {
@@ -121,7 +121,7 @@ public class NetConsole : IMessage<string>
         outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
 
         outData.AddRange(Encoding.ASCII.GetBytes(data));
-
+        
         return outData.ToArray();
     }
 }

@@ -17,26 +17,31 @@ public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
 
     void OnReceiveDataEvent(byte[] data, IPEndPoint ep)
     {
+        NetConsole console = new NetConsole();
+        
         if (NetworkManager.Instance.isServer)
         {
             NetworkManager.Instance.Broadcast(data);
         }
 
-        messages.text += System.Text.ASCIIEncoding.UTF8.GetString(data) + System.Environment.NewLine;
+        messages.text += console.Deserialize(data) + System.Environment.NewLine;
     }
 
     void OnEndEdit(string str)
     {
         if (inputMessage.text != "")
         {
+            NetConsole console = new NetConsole();
+            console.data = inputMessage.text;
             if (NetworkManager.Instance.isServer)
             {
-                NetworkManager.Instance.Broadcast(System.Text.ASCIIEncoding.UTF8.GetBytes(inputMessage.text));
+                NetworkManager.Instance.Broadcast(console.Serialize());
                 messages.text += inputMessage.text + System.Environment.NewLine;
             }
             else
             {
-                NetworkManager.Instance.SendToServer(System.Text.ASCIIEncoding.UTF8.GetBytes(inputMessage.text));
+                
+                NetworkManager.Instance.SendToServer(console.Serialize());
             }
 
             inputMessage.ActivateInputField();

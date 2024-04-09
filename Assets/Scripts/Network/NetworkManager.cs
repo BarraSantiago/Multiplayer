@@ -92,8 +92,6 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             case MessageType.HandShake:
                 break;
             case MessageType.Console:
-
-                console.Deserialize()
                 
                 if (OnReceiveEvent != null)
                 {
