@@ -1,9 +1,7 @@
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using System;
 using System.Text;
-using System.Net;
 
 public enum MessageType
 {
@@ -22,6 +20,7 @@ public interface IMessage<T>
 public class NetHandShake : IMessage<(long, int)>
 {
     (long, int) data;
+
     public (long, int) Deserialize(byte[] message)
     {
         (long, int) outData;
@@ -34,7 +33,7 @@ public class NetHandShake : IMessage<(long, int)>
 
     public MessageType GetMessageType()
     {
-       return MessageType.HandShake;
+        return MessageType.HandShake;
     }
 
     public byte[] Serialize()
@@ -65,7 +64,7 @@ public class NetVector3 : IMessage<UnityEngine.Vector3>
     {
         Vector3 outData;
 
-        outData.x = BitConverter.ToSingle(message, 8);
+        outData.x =  
         outData.y = BitConverter.ToSingle(message, 12);
         outData.z = BitConverter.ToSingle(message, 16);
 
@@ -91,4 +90,38 @@ public class NetVector3 : IMessage<UnityEngine.Vector3>
     }
 
     //Dictionary<Client,Dictionary<msgType,int>>
+}
+
+public class NetConsole : IMessage<string>
+{
+    private string data;
+
+    public MessageType messageType()
+    {
+        return MessageType.Console;
+    }
+    public string Deserialize(byte[] message)
+    {
+        string outData;
+
+        outData = BitConverter.ToString(message, 4);
+
+        return outData;
+    }
+
+    public MessageType GetMessageType()
+    {
+        return MessageType.HandShake;
+    }
+
+    public byte[] Serialize()
+    {
+        List<byte> outData = new List<byte>();
+
+        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+
+        outData.AddRange(Encoding.ASCII.GetBytes(data));
+
+        return outData.ToArray();
+    }
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Text;
 using UnityEngine;
 
 public struct Client
@@ -19,20 +20,11 @@ public struct Client
 
 public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveData
 {
-    public IPAddress ipAddress
-    {
-        get; private set;
-    }
+    public IPAddress ipAddress { get; private set; }
 
-    public int port
-    {
-        get; private set;
-    }
+    public int port { get; private set; }
 
-    public bool isServer
-    {
-        get; private set;
-    }
+    public bool isServer { get; private set; }
 
     public int TimeOut = 30;
 
@@ -92,8 +84,33 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     {
         AddClient(ip);
 
-        if (OnReceiveEvent != null)
-            OnReceiveEvent.Invoke(data, ip);
+        MessageType messageType = CheckMessageType(data);
+
+        NetConsole console = new NetConsole();
+        switch (messageType)
+        {
+            case MessageType.HandShake:
+                break;
+            case MessageType.Console:
+
+                console.Deserialize()
+                
+                if (OnReceiveEvent != null)
+                {
+                    OnReceiveEvent.Invoke(data, ip);
+                }
+
+                break;
+            case MessageType.Position:
+                break;
+            default:
+                break;
+        }
+    }
+
+    private MessageType CheckMessageType(byte[] data)
+    {
+        return (MessageType)BitConverter.ToInt32(data);
     }
 
     public void SendToServer(byte[] data)
