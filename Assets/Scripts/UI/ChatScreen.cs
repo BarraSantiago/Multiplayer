@@ -32,7 +32,8 @@ public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
         if (inputMessage.text != "")
         {
             NetConsole console = new NetConsole();
-            console.data = str;
+            //TODO added client's id to message
+            console.data = NetworkManager.client.id + str;
             
             if (NetworkManager.Instance.isServer)
             {

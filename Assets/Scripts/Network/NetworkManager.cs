@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Text;
 using UnityEngine;
 
 public struct Client
@@ -24,12 +23,12 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
 
     public int port { get; private set; }
 
+    public static Client client;
     public bool isServer { get; private set; }
 
     public int TimeOut = 30;
 
     public Action<byte[], IPEndPoint> OnReceiveEvent;
-    public Action<byte[], IPEndPoint> OnReceiveHandshake;
 
     private UdpConnection connection;
 
@@ -77,7 +76,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     {
         NetHandShake netHandShake = new NetHandShake();
 
-        netHandShake.data = -1;
+        netHandShake.data = client.id = -1;
 
         SendToServer(netHandShake.Serialize());
     }
@@ -110,8 +109,6 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
                 break;
             case MessageType.Position:
                 break;
-            default:
-                break;
         }
     }
 
@@ -122,14 +119,18 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         {
             netHandShake.data = ipToId[ipEndPoint];
             connection.Send(netHandShake.Serialize(), ipEndPoint);
+            // TODO aca el server deberia mandarle a todos los clientes la lista nueva de clientes
+            Broadcast();
+        }
+        else if(client.id == -1)
+        {
             
-            Broadcast(netHandShake.Serialize());
+            int newId = netHandShake.Deserialize(data);
+            client = new Client(ipEndPoint, newId, Time.realtimeSinceStartup);
         }
         else
         {
-            int newId = netHandShake.Deserialize(data);
-            Client client
-            //TODO this client recives his new id
+            
         }
     }
 
