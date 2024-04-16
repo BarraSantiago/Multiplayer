@@ -29,6 +29,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     public int TimeOut = 30;
 
     public Action<byte[], IPEndPoint> OnReceiveEvent;
+    public Action<byte[], IPEndPoint> OnReceiveHandshake;
 
     private UdpConnection connection;
 
@@ -66,9 +67,19 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             ipToId[ip] = clientId;
 
             clients.Add(clientId, new Client(ip, id, Time.realtimeSinceStartup));
+            SendHandshake();
 
             clientId++;
         }
+    }
+
+    private void SendHandshake()
+    {
+        NetHandShake netHandShake = new NetHandShake();
+
+        netHandShake.data = -1;
+
+        SendToServer(netHandShake.Serialize());
     }
 
     void RemoveClient(IPEndPoint ip)
@@ -90,19 +101,35 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         switch (messageType)
         {
             case MessageType.HandShake:
+                RecieveHandshake(data, ip);
                 break;
+
             case MessageType.Console:
-                
-                if (OnReceiveEvent != null)
-                {
-                    OnReceiveEvent.Invoke(data, ip);
-                }
+                OnReceiveEvent?.Invoke(data, ip);
 
                 break;
             case MessageType.Position:
                 break;
             default:
                 break;
+        }
+    }
+
+    private void RecieveHandshake(byte[] data, IPEndPoint ipEndPoint)
+    {
+        NetHandShake netHandShake = new NetHandShake();
+        if (isServer)
+        {
+            netHandShake.data = ipToId[ipEndPoint];
+            connection.Send(netHandShake.Serialize(), ipEndPoint);
+            
+            Broadcast(netHandShake.Serialize());
+        }
+        else
+        {
+            int newId = netHandShake.Deserialize(data);
+            Client client
+            //TODO this client recives his new id
         }
     }
 

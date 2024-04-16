@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System;
-using System.Text;
 
 public enum MessageType
 {
@@ -17,16 +16,15 @@ public interface IMessage<T>
     public T Deserialize(byte[] message);
 }
 
-public class NetHandShake : IMessage<(long, int)>
+public class NetHandShake : IMessage<int>
 {
-    (long, int) data;
+    public int data;
 
-    public (long, int) Deserialize(byte[] message)
+    public int Deserialize(byte[] message)
     {
-        (long, int) outData;
+        int outData;
 
-        outData.Item1 = BitConverter.ToInt64(message, 4);
-        outData.Item2 = BitConverter.ToInt32(message, 12);
+        outData = BitConverter.ToInt32(message, 4);
 
         return outData;
     }
@@ -42,10 +40,8 @@ public class NetHandShake : IMessage<(long, int)>
 
         outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
 
-        outData.AddRange(BitConverter.GetBytes(data.Item1));
-        outData.AddRange(BitConverter.GetBytes(data.Item2));
-
-
+        outData.AddRange(BitConverter.GetBytes(data));
+        
         return outData.ToArray();
     }
 }
@@ -127,8 +123,8 @@ public class NetConsole : IMessage<string>
         foreach (char letter in data)
         {
             outData.Add((byte)letter);
-            
         }
+        
         return outData.ToArray();
     }
 }
