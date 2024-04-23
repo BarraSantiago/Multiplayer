@@ -44,7 +44,7 @@ public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
 
                 NetworkManager.Instance.Broadcast(combinedBytes);
                 
-                messages.text += str + System.Environment.NewLine;
+                messages.text += NetworkManager.thisPlayer.name + ": " + str + System.Environment.NewLine;
             }
             else
             {

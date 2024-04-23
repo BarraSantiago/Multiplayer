@@ -158,8 +158,9 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         if (isServer)
         {
             NetServerToClient netServerToClient = new NetServerToClient();
+           
             netServerToClient.data = players.ToArray();
-
+            //TODO update server list of players
             Broadcast(netServerToClient.Serialize());
         }
         else
