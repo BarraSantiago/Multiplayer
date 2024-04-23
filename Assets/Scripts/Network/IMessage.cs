@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using System.IO;
+using System.Runtime.Serialization.Formatters.Binary;
+
 
 public enum MessageType
 {
@@ -16,15 +19,15 @@ public interface IMessage<T>
     public T Deserialize(byte[] message);
 }
 
-public class NetHandShake : IMessage<int>
+public class NetClientToServerHS : IMessage<string>
 {
-    public int data;
+    public string data;
 
-    public int Deserialize(byte[] message)
+    public string Deserialize(byte[] message)
     {
-        int outData;
+        string outData;
 
-        outData = BitConverter.ToInt32(message, 4);
+        outData = BitConverter.ToString(message, 4);
 
         return outData;
     }
@@ -40,8 +43,52 @@ public class NetHandShake : IMessage<int>
 
         outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
 
-        outData.AddRange(BitConverter.GetBytes(data));
+        foreach (char letter in data)
+        {
+            outData.Add((byte)letter);
+        }
         
+        return outData.ToArray();
+    }
+}
+
+public class NetServerToClient : IMessage<Player[]>
+{
+    public Player[] data;
+
+    public Player[] Deserialize(byte[] message)
+    {
+        
+        BinaryFormatter binaryFormatter = new BinaryFormatter();
+        
+        byte[] playerArray = new byte[message.Length - 4];
+        
+        // Removes the message type from the array
+        Array.Copy(message, 4, playerArray, 0, playerArray.Length);
+
+        using MemoryStream memoryStream = new MemoryStream(playerArray);
+
+        return (Player[])binaryFormatter.Deserialize(memoryStream);
+
+    }
+
+    public MessageType GetMessageType()
+    {
+        return MessageType.HandShake;
+    }
+
+    public byte[] Serialize()
+    {
+        BinaryFormatter binaryFormatter = new BinaryFormatter();
+        using MemoryStream memoryStream = new MemoryStream();
+
+        binaryFormatter.Serialize(memoryStream, data);
+
+        List<byte> outData = new List<byte>();
+        
+        outData.AddRange(BitConverter.GetBytes(1));
+        outData.AddRange(memoryStream.ToArray());
+
         return outData.ToArray();
     }
 }

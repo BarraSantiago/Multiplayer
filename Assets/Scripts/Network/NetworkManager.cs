@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using UnityEngine;
 
@@ -17,13 +18,21 @@ public struct Client
     }
 }
 
+public struct Player
+{
+    public int clientID;
+    public string name;
+    public Vector3 position;
+}
+
 public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveData
 {
     public IPAddress ipAddress { get; private set; }
 
     public int port { get; private set; }
 
-    public static Client client;
+    public static Player thisPlayer;
+    private List<Player> players;
     public bool isServer { get; private set; }
 
     public int TimeOut = 30;
@@ -44,13 +53,13 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         connection = new UdpConnection(port, this);
     }
 
-    public void StartClient(IPAddress ip, int port)
+    public void StartClient(IPAddress ip, int port, string name)
     {
         isServer = false;
 
         this.port = port;
         this.ipAddress = ip;
-
+        thisPlayer.name = name;
         connection = new UdpConnection(ip, port, this);
 
         AddClient(new IPEndPoint(ip, port));
@@ -66,20 +75,12 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             ipToId[ip] = clientId;
 
             clients.Add(clientId, new Client(ip, id, Time.realtimeSinceStartup));
-            SendHandshake();
+            SendHandshake(thisPlayer.name);
 
             clientId++;
         }
     }
 
-    private void SendHandshake()
-    {
-        NetHandShake netHandShake = new NetHandShake();
-
-        netHandShake.data = client.id = -1;
-
-        SendToServer(netHandShake.Serialize());
-    }
 
     void RemoveClient(IPEndPoint ip)
     {
@@ -96,11 +97,10 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
 
         MessageType messageType = CheckMessageType(data);
 
-        NetConsole console = new NetConsole();
-        switch (messageType)
+         switch (messageType)
         {
             case MessageType.HandShake:
-                RecieveHandshake(data, ip);
+                RecieveHandshake(data);
                 break;
 
             case MessageType.Console:
@@ -112,27 +112,64 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         }
     }
 
-    private void RecieveHandshake(byte[] data, IPEndPoint ipEndPoint)
+    private void RecieveHandshake(byte[] data)
     {
-        NetHandShake netHandShake = new NetHandShake();
+
         if (isServer)
         {
-            netHandShake.data = ipToId[ipEndPoint];
-            connection.Send(netHandShake.Serialize(), ipEndPoint);
+            NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
+
+            string name = netClientToServerHs.Deserialize(data);
+            Player player = new Player();
+
+            player.name = name;
+            player.clientID = clientId;
+            players.Add(player);
+
             // TODO aca el server deberia mandarle a todos los clientes la lista nueva de clientes
-            Broadcast();
-        }
-        else if(client.id == -1)
-        {
             
-            int newId = netHandShake.Deserialize(data);
-            client = new Client(ipEndPoint, newId, Time.realtimeSinceStartup);
         }
         else
         {
-            
+            NetServerToClient netServerToClient = new NetServerToClient();
+
+            Player[] newPlayers = netServerToClient.Deserialize(data);
+            List<Player> playersList = new List<Player>();
+
+            // Player recognizes itself from the list and removes himself
+            for (int i = 0; i < newPlayers.Length; i++)
+            {
+                if (newPlayers[i].name != thisPlayer.name) continue;
+
+                thisPlayer = newPlayers[i];
+                playersList = newPlayers.ToList();
+                playersList.Remove(newPlayers[i]);
+                break;
+            }
+
+            players = playersList;
         }
     }
+
+    private void SendHandshake(string name)
+    {
+        if (isServer)
+        {
+            NetServerToClient netServerToClient = new NetServerToClient();
+            netServerToClient.data = players.ToArray();
+
+            Broadcast(netServerToClient.Serialize());
+        }
+        else
+        {
+            NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
+
+            thisPlayer.name = name;
+
+            SendToServer(netClientToServerHs.Serialize());
+        }
+    }
+
 
     private MessageType CheckMessageType(byte[] data)
     {
