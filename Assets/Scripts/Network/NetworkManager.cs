@@ -46,11 +46,13 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
 
     int clientId = 0; // This id should be generated during first handshake
 
-    public void StartServer(int port)
+    public void StartServer(int port, string name)
     {
         isServer = true;
+        thisPlayer.name = name;
         this.port = port;
         connection = new UdpConnection(port, this);
+        players = new List<Player>();
     }
 
     public void StartClient(IPAddress ip, int port, string name)
@@ -164,6 +166,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         {
             NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
 
+            netClientToServerHs.data = name;
             thisPlayer.name = name;
 
             SendToServer(netClientToServerHs.Serialize());

@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System;
+using System.Net;
 using UnityEngine.UI;
 
 public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
@@ -31,18 +32,31 @@ public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
     {
         if (inputMessage.text != "")
         {
-            NetConsole console = new NetConsole();
-            //TODO added client's id to message
-            console.data = NetworkManager.thisPlayer.name + str;
-            
             if (NetworkManager.Instance.isServer)
             {
-                NetworkManager.Instance.Broadcast(console.Serialize());
-                messages.text += inputMessage.text + System.Environment.NewLine;
+                int numberToAdd = (int)MessageType.Console;
+                byte[] numberToAddBytes = BitConverter.GetBytes(numberToAdd);
+                byte[] messageBytes = System.Text.ASCIIEncoding.UTF8.GetBytes(NetworkManager.thisPlayer.name + ": "+ str);
+
+                byte[] combinedBytes = new byte[numberToAddBytes.Length + messageBytes.Length];
+                Buffer.BlockCopy(numberToAddBytes, 0, combinedBytes, 0, numberToAddBytes.Length);
+                Buffer.BlockCopy(messageBytes, 0, combinedBytes, numberToAddBytes.Length, messageBytes.Length);
+
+                NetworkManager.Instance.Broadcast(combinedBytes);
+                
+                messages.text += str + System.Environment.NewLine;
             }
             else
             {
-                NetworkManager.Instance.SendToServer(console.Serialize());
+                int numberToAdd = (int)MessageType.Console;
+                byte[] numberToAddBytes = BitConverter.GetBytes(numberToAdd);
+                byte[] messageBytes = System.Text.ASCIIEncoding.UTF8.GetBytes( NetworkManager.thisPlayer.name + ": "+ str);
+
+                byte[] combinedBytes = new byte[numberToAddBytes.Length + messageBytes.Length];
+                Buffer.BlockCopy(numberToAddBytes, 0, combinedBytes, 0, numberToAddBytes.Length);
+                Buffer.BlockCopy(messageBytes, 0, combinedBytes, numberToAddBytes.Length, messageBytes.Length);
+
+                NetworkManager.Instance.SendToServer(combinedBytes);
             }
 
             inputMessage.ActivateInputField();

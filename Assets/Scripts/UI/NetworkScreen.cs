@@ -29,7 +29,9 @@ public class NetworkScreen : MonoBehaviourSingleton<NetworkScreen>
     void OnStartServerBtnClick()
     {
         int port = System.Convert.ToInt32(portInputField.text);
-        NetworkManager.Instance.StartServer(port);
+        string name = nameInputField.text;
+
+        NetworkManager.Instance.StartServer(port, name);
         SwitchToChatScreen();
     }
 

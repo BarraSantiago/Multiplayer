@@ -47,7 +47,7 @@ public class NetClientToServerHS : IMessage<string>
         {
             outData.Add((byte)letter);
         }
-        
+
         return outData.ToArray();
     }
 }
@@ -58,18 +58,16 @@ public class NetServerToClient : IMessage<Player[]>
 
     public Player[] Deserialize(byte[] message)
     {
-        
         BinaryFormatter binaryFormatter = new BinaryFormatter();
-        
+
         byte[] playerArray = new byte[message.Length - 4];
-        
+
         // Removes the message type from the array
         Array.Copy(message, 4, playerArray, 0, playerArray.Length);
 
         using MemoryStream memoryStream = new MemoryStream(playerArray);
 
         return (Player[])binaryFormatter.Deserialize(memoryStream);
-
     }
 
     public MessageType GetMessageType()
@@ -85,7 +83,7 @@ public class NetServerToClient : IMessage<Player[]>
         binaryFormatter.Serialize(memoryStream, data);
 
         List<byte> outData = new List<byte>();
-        
+
         outData.AddRange(BitConverter.GetBytes(1));
         outData.AddRange(memoryStream.ToArray());
 
@@ -107,8 +105,8 @@ public class NetVector3 : IMessage<UnityEngine.Vector3>
     {
         Vector3 outData;
 
-        outData.x =  
-        outData.y = BitConverter.ToSingle(message, 12);
+        outData.x =
+            outData.y = BitConverter.ToSingle(message, 12);
         outData.z = BitConverter.ToSingle(message, 16);
 
         return outData;
@@ -143,16 +141,15 @@ public class NetConsole : IMessage<string>
     {
         return MessageType.Console;
     }
+
     public string Deserialize(byte[] message)
     {
-        string outData;
-
-        outData = BitConverter.ToString(message, 4);
-        for (int i = 0; i < message.Length; i+=4)
-        {
-            outData += (char)message[i];
-        }
+        byte[] messageWithoutHeader = new byte[message.Length - 4];
         
+        Array.Copy(message, 4, messageWithoutHeader, 0, message.Length - 4);
+
+        string outData = System.Text.Encoding.UTF8.GetString(messageWithoutHeader);
+
         return outData;
     }
 
@@ -171,7 +168,7 @@ public class NetConsole : IMessage<string>
         {
             outData.Add((byte)letter);
         }
-        
+
         return outData.ToArray();
     }
 }
