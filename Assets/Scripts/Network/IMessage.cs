@@ -9,7 +9,9 @@ public enum MessageType
 {
     HandShake = -1,
     Console = 0,
-    Position = 1
+    Position = 1,
+    Ping = 2,
+    Pong = 3,
 }
 
 public interface IMessage<T>

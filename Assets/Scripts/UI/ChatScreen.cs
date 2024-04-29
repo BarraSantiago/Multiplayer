@@ -5,6 +5,7 @@ using UnityEngine.UI;
 public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
 {
     public Text messages;
+    public Text ms;
     public InputField inputMessage;
 
     protected override void Initialize()
@@ -14,6 +15,11 @@ public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
         this.gameObject.SetActive(false);
 
         NetworkManager.Instance.OnReceiveEvent += OnReceiveDataEvent;
+    }
+
+    private void Update()
+    {
+        ms.text = "MS: " + NetworkManager.MS;
     }
 
     void OnReceiveDataEvent(byte[] data, IPEndPoint ep)

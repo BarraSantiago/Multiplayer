@@ -35,7 +35,11 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     private List<Player> players;
     public bool isServer { get; private set; }
 
-    public int TimeOut = 30;
+    public int TimeOut = 10;
+
+    private float time = 0;
+
+    public static float MS { get; private set; } = 0;
 
     public Action<byte[], IPEndPoint> OnReceiveEvent;
 
@@ -63,8 +67,10 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         this.ipAddress = ip;
         thisPlayer.name = name;
         connection = new UdpConnection(ip, port, this);
-
+        time = Time.realtimeSinceStartup;
+        
         AddClient(new IPEndPoint(ip, port));
+        SendPing();
     }
 
     void AddClient(IPEndPoint ip)
@@ -99,7 +105,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
 
         MessageType messageType = CheckMessageType(data);
 
-         switch (messageType)
+        switch (messageType)
         {
             case MessageType.HandShake:
                 RecieveHandshake(data);
@@ -111,12 +117,46 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
                 break;
             case MessageType.Position:
                 break;
+
+            case MessageType.Ping:
+                SendPing();
+                break;
+
+            case MessageType.Pong:
+                SendPong(ip);
+                break;
         }
+    }
+
+
+    /// <summary>
+    /// Client updates time and sends ping
+    /// </summary>
+    /// <param name="data"></param>
+    private void SendPing()
+    {
+        time = Time.realtimeSinceStartup;
+        
+        SendToServer(BitConverter.GetBytes((int)MessageType.Pong));
+    }
+
+    /// <summary>
+    /// Server updates player time and sends pong
+    /// </summary>
+    /// <param name="ip"> Client to send pong to </param>
+    private void SendPong(IPEndPoint ip)
+    {
+        var client = clients[ipToId[ip]];
+
+        client.timeStamp = Time.realtimeSinceStartup;
+
+        clients[ipToId[ip]] = client;
+        
+        connection.Send(BitConverter.GetBytes((int)MessageType.Ping), ip);
     }
 
     private void RecieveHandshake(byte[] data)
     {
-
         if (isServer)
         {
             NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
@@ -129,7 +169,6 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             players.Add(player);
 
             // TODO aca el server deberia mandarle a todos los clientes la lista nueva de clientes
-            
         }
         else
         {
@@ -158,7 +197,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         if (isServer)
         {
             NetServerToClient netServerToClient = new NetServerToClient();
-           
+
             netServerToClient.data = players.ToArray();
             //TODO update server list of players
             Broadcast(netServerToClient.Serialize());
@@ -201,5 +240,37 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         // Flush the data in main thread
         if (connection != null)
             connection.FlushReceiveData();
+        
+        CheckPings();
+    }
+
+    private void CheckPings()
+    {
+        if (isServer)
+        {
+            bool clientRemoved = false;
+            foreach (var client in clients.Values)
+            {
+                if (client.timeStamp + TimeOut < Time.realtimeSinceStartup)
+                {
+                    RemoveClient(client.ipEndPoint);
+                    clientRemoved = true;
+                }
+            }
+
+            if (clientRemoved)
+            {
+                SendHandshake("");
+            }
+        }
+        else
+        {
+            MS = Time.realtimeSinceStartup - time;
+            
+            if (time + TimeOut < Time.realtimeSinceStartup)
+            {
+                //TODO client disconnects itself
+            }
+        }
     }
 }
