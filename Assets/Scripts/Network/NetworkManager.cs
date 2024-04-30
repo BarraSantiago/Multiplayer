@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using UnityEditor;
 using UnityEngine;
 
 public struct Client
@@ -28,23 +29,18 @@ public struct Player
 public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveData
 {
     public IPAddress ipAddress { get; private set; }
-
     public int port { get; private set; }
 
     public static Player thisPlayer;
-    private List<Player> players;
     public bool isServer { get; private set; }
 
     public int TimeOut = 10;
-
-    private float time = 0;
-
     public static float MS { get; private set; } = 0;
-
     public Action<byte[], IPEndPoint> OnReceiveEvent;
 
+    private List<Player> players;
+    private float time = 0;
     private UdpConnection connection;
-
     private readonly Dictionary<int, Client> clients = new Dictionary<int, Client>();
     private readonly Dictionary<IPEndPoint, int> ipToId = new Dictionary<IPEndPoint, int>();
 
@@ -67,8 +63,8 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         this.ipAddress = ip;
         thisPlayer.name = name;
         connection = new UdpConnection(ip, port, this);
-        time = Time.realtimeSinceStartup;
-        
+        time = DateTime.Now.Ticks;
+
         AddClient(new IPEndPoint(ip, port));
         SendPing();
     }
@@ -82,7 +78,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             int id = clientId;
             ipToId[ip] = clientId;
 
-            clients.Add(clientId, new Client(ip, id, Time.realtimeSinceStartup));
+            clients.Add(clientId, new Client(ip, id, DateTime.Now.Ticks));
             SendHandshake(thisPlayer.name);
 
             clientId++;
@@ -113,8 +109,8 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
 
             case MessageType.Console:
                 OnReceiveEvent?.Invoke(data, ip);
-
                 break;
+
             case MessageType.Position:
                 break;
 
@@ -125,6 +121,14 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             case MessageType.Pong:
                 SendPong(ip);
                 break;
+            case MessageType.Close:
+                break;
+
+            case MessageType.Dispose:
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException();
         }
     }
 
@@ -135,8 +139,8 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     /// <param name="data"></param>
     private void SendPing()
     {
-        time = Time.realtimeSinceStartup;
-        
+        time = DateTime.Now.Ticks;
+
         SendToServer(BitConverter.GetBytes((int)MessageType.Pong));
     }
 
@@ -148,10 +152,10 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     {
         var client = clients[ipToId[ip]];
 
-        client.timeStamp = Time.realtimeSinceStartup;
+        client.timeStamp = DateTime.Now.Ticks;
 
         clients[ipToId[ip]] = client;
-        
+
         connection.Send(BitConverter.GetBytes((int)MessageType.Ping), ip);
     }
 
@@ -199,6 +203,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             NetServerToClient netServerToClient = new NetServerToClient();
 
             netServerToClient.data = players.ToArray();
+
             //TODO update server list of players
             Broadcast(netServerToClient.Serialize());
         }
@@ -240,22 +245,21 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         // Flush the data in main thread
         if (connection != null)
             connection.FlushReceiveData();
-        
+
         CheckPings();
     }
 
     private void CheckPings()
     {
+        if (connection == null) return;
+        
         if (isServer)
         {
             bool clientRemoved = false;
-            foreach (var client in clients.Values)
+            foreach (var client in clients.Values.Where(client => client.timeStamp + TimeOut < DateTime.Now.Ticks))
             {
-                if (client.timeStamp + TimeOut < Time.realtimeSinceStartup)
-                {
-                    RemoveClient(client.ipEndPoint);
-                    clientRemoved = true;
-                }
+                RemoveClient(client.ipEndPoint);
+                clientRemoved = true;
             }
 
             if (clientRemoved)
@@ -265,12 +269,22 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         }
         else
         {
-            MS = Time.realtimeSinceStartup - time;
-            
-            if (time + TimeOut < Time.realtimeSinceStartup)
+            MS = DateTime.Now.Ticks - time;
+
+            if (time + TimeOut < DateTime.Now.Ticks)
             {
                 //TODO client disconnects itself
+                Disconnect();
             }
         }
+    }
+
+    public void Disconnect()
+    {
+    #if UNITY_EDITOR
+        EditorApplication.isPlaying = false;
+    #else
+        Application.Quit();
+    #endif
     }
 }

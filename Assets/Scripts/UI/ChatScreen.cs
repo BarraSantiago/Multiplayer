@@ -19,7 +19,7 @@ public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
 
     private void Update()
     {
-        ms.text = "MS: " + NetworkManager.MS;
+        ms.text = "MS: " + NetworkManager.MS.ToString("");
     }
 
     void OnReceiveDataEvent(byte[] data, IPEndPoint ep)

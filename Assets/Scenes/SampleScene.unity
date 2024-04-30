@@ -256,7 +256,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0f30c9f44b7174d45b74c4ae777e3447, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  TimeOut: 30
+  TimeOut: 3
 --- !u!4 &180350410
 Transform:
   m_ObjectHideFlags: 0

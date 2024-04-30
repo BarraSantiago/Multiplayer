@@ -8,10 +8,12 @@ using System.Runtime.Serialization.Formatters.Binary;
 public enum MessageType
 {
     HandShake = -1,
-    Console = 0,
-    Position = 1,
-    Ping = 2,
-    Pong = 3,
+    Console,
+    Position,
+    Ping,
+    Pong,
+    Close,
+    Dispose 
 }
 
 public interface IMessage<T>
