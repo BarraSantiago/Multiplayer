@@ -257,6 +257,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   TimeOut: 3
+  bodyPrefab: {fileID: 794701924043253740, guid: 41692726f0612d545b71d4fc55a547b3,
+    type: 3}
 --- !u!4 &180350410
 Transform:
   m_ObjectHideFlags: 0
@@ -2160,8 +2162,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -292.07663, y: 122.629715}
-  m_SizeDelta: {x: -660.3533, y: -306.4414}
+  m_AnchoredPosition: {x: -343, y: 166}
+  m_SizeDelta: {x: -711.5457, y: -359.0558}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1772918150
 MonoBehaviour:
@@ -2185,7 +2187,7 @@ MonoBehaviour:
       m_Calls: []
   m_FontData:
     m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
-    m_FontSize: 61
+    m_FontSize: 32
     m_FontStyle: 0
     m_BestFit: 0
     m_MinSize: 10

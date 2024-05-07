@@ -13,8 +13,11 @@ public enum MessageType
     Ping,
     Pong,
     Close,
-    Dispose 
+    Dispose,
+    Shoot
 }
+
+
 
 public interface IMessage<T>
 {
@@ -95,25 +98,28 @@ public class NetServerToClient : IMessage<Player[]>
     }
 }
 
-public class NetVector3 : IMessage<UnityEngine.Vector3>
+public class NetVector3 : IMessage<Player>
 {
     private static ulong lastMsgID = 0;
-    private Vector3 data;
+    private Player data;
 
-    public NetVector3(Vector3 data)
+    public NetVector3(byte[] data)
     {
-        this.data = data;
+        this.data = Deserialize(data);
     }
 
-    public Vector3 Deserialize(byte[] message)
+    public Player Deserialize(byte[] message)
     {
-        Vector3 outData;
+        BinaryFormatter binaryFormatter = new BinaryFormatter();
 
-        outData.x =
-            outData.y = BitConverter.ToSingle(message, 12);
-        outData.z = BitConverter.ToSingle(message, 16);
+        byte[] player = new byte[message.Length - 4];
 
-        return outData;
+        // Removes the message type from the array
+        Array.Copy(message, 4, player, 0, player.Length);
+
+        using MemoryStream memoryStream = new MemoryStream(player);
+
+        return (Player)binaryFormatter.Deserialize(memoryStream);
     }
 
     public MessageType GetMessageType()
@@ -123,18 +129,19 @@ public class NetVector3 : IMessage<UnityEngine.Vector3>
 
     public byte[] Serialize()
     {
+        BinaryFormatter binaryFormatter = new BinaryFormatter();
+        using MemoryStream memoryStream = new MemoryStream();
+
+        binaryFormatter.Serialize(memoryStream, data);
+
         List<byte> outData = new List<byte>();
 
-        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
-        outData.AddRange(BitConverter.GetBytes(lastMsgID++));
-        outData.AddRange(BitConverter.GetBytes(data.x));
-        outData.AddRange(BitConverter.GetBytes(data.y));
-        outData.AddRange(BitConverter.GetBytes(data.z));
+        outData.AddRange(BitConverter.GetBytes(1));
+        outData.AddRange(memoryStream.ToArray());
 
         return outData.ToArray();
     }
 
-    //Dictionary<Client,Dictionary<msgType,int>>
 }
 
 public class NetConsole : IMessage<string>

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 public struct Client
 {
@@ -19,11 +20,13 @@ public struct Client
     }
 }
 
+[Serializable]
 public struct Player
 {
     public int clientID;
     public string name;
-    public Vector3 position;
+    public int hp;
+    [FormerlySerializedAs("position")] public Transform transform;
 }
 
 public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveData
@@ -37,6 +40,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     public int TimeOut = 10;
     public static float MS { get; private set; } = 0;
     public Action<byte[], IPEndPoint> OnReceiveEvent;
+    public GameObject bodyPrefab;
 
     private List<Player> players;
     private float time = 0;
@@ -63,11 +67,74 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         this.ipAddress = ip;
         thisPlayer.name = name;
         connection = new UdpConnection(ip, port, this);
-        time = DateTime.Now.Ticks;
+        time = DateTime.UtcNow.Ticks;
 
         AddClient(new IPEndPoint(ip, port));
         SendPing();
     }
+
+    public void OnReceiveData(byte[] data, IPEndPoint ip)
+    {
+        MessageType messageType = CheckMessageType(data);
+
+        switch (messageType)
+        {
+            case MessageType.HandShake:
+                RecieveHandshake(data, ip);
+                break;
+
+            case MessageType.Console:
+                OnReceiveEvent?.Invoke(data, ip);
+                break;
+
+            case MessageType.Position:
+                MovePlayers(data);
+                break;
+
+            case MessageType.Ping:
+                SendPing();
+                break;
+
+            case MessageType.Pong:
+                SendPong(ip);
+                break;
+
+            case MessageType.Close:
+                break;
+
+            case MessageType.Dispose:
+                break;
+
+            case MessageType.Shoot:
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
+    }
+
+    private void MovePlayers(byte[] data)
+    {
+        NetVector3 netVector3 = new NetVector3(data);
+        Player newData = netVector3.Deserialize(data);
+        var oldData = players[newData.clientID];
+
+        if (isServer)
+        {
+            oldData.transform = newData.transform;
+            players[newData.clientID] = oldData;
+            Broadcast(data);
+        }
+        else
+        {
+            if (newData.clientID == thisPlayer.clientID)
+                return;
+
+            oldData.transform = newData.transform;
+            players[newData.clientID] = oldData;
+        }
+    }
+
 
     void AddClient(IPEndPoint ip)
     {
@@ -78,7 +145,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             int id = clientId;
             ipToId[ip] = clientId;
 
-            clients.Add(clientId, new Client(ip, id, DateTime.Now.Ticks));
+            clients.Add(clientId, new Client(ip, id, DateTime.UtcNow.Ticks));
             SendHandshake(thisPlayer.name);
 
             clientId++;
@@ -91,44 +158,8 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         if (ipToId.ContainsKey(ip))
         {
             Debug.Log("Removing client: " + ip.Address);
+            
             clients.Remove(ipToId[ip]);
-        }
-    }
-
-    public void OnReceiveData(byte[] data, IPEndPoint ip)
-    {
-        AddClient(ip);
-
-        MessageType messageType = CheckMessageType(data);
-
-        switch (messageType)
-        {
-            case MessageType.HandShake:
-                RecieveHandshake(data);
-                break;
-
-            case MessageType.Console:
-                OnReceiveEvent?.Invoke(data, ip);
-                break;
-
-            case MessageType.Position:
-                break;
-
-            case MessageType.Ping:
-                SendPing();
-                break;
-
-            case MessageType.Pong:
-                SendPong(ip);
-                break;
-            case MessageType.Close:
-                break;
-
-            case MessageType.Dispose:
-                break;
-
-            default:
-                throw new ArgumentOutOfRangeException();
         }
     }
 
@@ -139,7 +170,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     /// <param name="data"></param>
     private void SendPing()
     {
-        time = DateTime.Now.Ticks;
+        time = DateTime.UtcNow.Ticks;
 
         SendToServer(BitConverter.GetBytes((int)MessageType.Pong));
     }
@@ -152,17 +183,19 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     {
         var client = clients[ipToId[ip]];
 
-        client.timeStamp = DateTime.Now.Ticks;
+        client.timeStamp = DateTime.UtcNow.Ticks;
 
         clients[ipToId[ip]] = client;
 
         connection.Send(BitConverter.GetBytes((int)MessageType.Ping), ip);
     }
 
-    private void RecieveHandshake(byte[] data)
+    private void RecieveHandshake(byte[] data, IPEndPoint ip)
     {
         if (isServer)
         {
+            AddClient(ip);
+
             NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
 
             string name = netClientToServerHs.Deserialize(data);
@@ -170,6 +203,9 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
 
             player.name = name;
             player.clientID = clientId;
+            player.hp = 2;
+            player.transform = bodyPrefab.transform;
+            player.transform.position = Vector3.one * clientId;
             players.Add(player);
 
             // TODO aca el server deberia mandarle a todos los clientes la lista nueva de clientes
@@ -184,6 +220,8 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             // Player recognizes itself from the list and removes himself
             for (int i = 0; i < newPlayers.Length; i++)
             {
+                GameObject body = Instantiate(bodyPrefab, Vector3.one * newPlayers[i].clientID, Quaternion.identity);
+                body.transform.position = newPlayers[i].transform.position;
                 if (newPlayers[i].name != thisPlayer.name) continue;
 
                 thisPlayer = newPlayers[i];
@@ -252,11 +290,11 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     private void CheckPings()
     {
         if (connection == null) return;
-        
+
         if (isServer)
         {
             bool clientRemoved = false;
-            foreach (var client in clients.Values.Where(client => client.timeStamp + TimeOut < DateTime.Now.Ticks))
+            foreach (var client in clients.Values.Where(client => client.timeStamp + TimeOut < DateTime.UtcNow.Ticks))
             {
                 RemoveClient(client.ipEndPoint);
                 clientRemoved = true;
@@ -269,9 +307,9 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         }
         else
         {
-            MS = DateTime.Now.Ticks - time;
+            MS = DateTime.UtcNow.Ticks - time;
 
-            if (time + TimeOut < DateTime.Now.Ticks)
+            if (time + TimeOut < DateTime.UtcNow.Ticks)
             {
                 //TODO client disconnects itself
                 Disconnect();
@@ -281,10 +319,11 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
 
     public void Disconnect()
     {
-    #if UNITY_EDITOR
+        connection.Close();
+#if UNITY_EDITOR
         EditorApplication.isPlaying = false;
-    #else
+#else
         Application.Quit();
-    #endif
+#endif
     }
 }
