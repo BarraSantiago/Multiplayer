@@ -9,11 +9,11 @@ using Utils;
 
 public struct Client
 {
-    public float timeStamp;
+    public DateTime timeStamp;
     public int id;
     public IPEndPoint ipEndPoint;
 
-    public Client(IPEndPoint ipEndPoint, int id, float timeStamp)
+    public Client(IPEndPoint ipEndPoint, int id, DateTime timeStamp)
     {
         this.timeStamp = timeStamp;
         this.id = id;
@@ -26,22 +26,19 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
 {
     public IPAddress ipAddress { get; private set; }
     public int port { get; private set; }
-
     public static Player thisPlayer;
     public bool isServer { get; private set; }
-
     public int TimeOut = 10;
     public static double MS { get; private set; } = 0;
     public Action<byte[], IPEndPoint> OnReceiveEvent;
     public GameObject bodyPrefab;
 
     private List<Player> players;
-    private float time = 0;
+    private DateTime time;
     private UdpConnection connection;
     private readonly Dictionary<int, Client> clients = new Dictionary<int, Client>();
     private readonly Dictionary<IPEndPoint, int> ipToId = new Dictionary<IPEndPoint, int>();
-
-    int clientId = 0; // This id should be generated during first handshake
+    private int clientId = 0;
 
     public void StartServer(int port, string name)
     {
@@ -60,10 +57,39 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         this.ipAddress = ip;
         thisPlayer.name = name;
         connection = new UdpConnection(ip, port, this);
-        time = DateTime.UtcNow.Ticks;
+        time = DateTime.UtcNow;
 
-        AddClient(new IPEndPoint(ip, port));
+        SendHandshake(name);
         SendPing();
+    }
+
+    private void Update()
+    {
+        // Flush the data in main thread
+        if (connection != null)
+            connection.FlushReceiveData();
+
+        CheckPings();
+    }
+
+    public void SendToServer(byte[] data)
+    {
+        connection.Send(data);
+    }
+
+    public void Broadcast(byte[] data)
+    {
+        using var iterator = clients.GetEnumerator();
+
+        while (iterator.MoveNext())
+        {
+            connection.Send(data, iterator.Current.Value.ipEndPoint);
+        }
+    }
+
+    private MessageType CheckMessageType(byte[] data)
+    {
+        return (MessageType)BitConverter.ToInt32(data);
     }
 
     public void OnReceiveData(byte[] data, IPEndPoint ip)
@@ -106,60 +132,94 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         }
     }
 
-    private void MovePlayers(byte[] data)
+    private void RecieveHandshake(byte[] data, IPEndPoint ip)
     {
-        NetVector3 netVector3 = new NetVector3(data);
-        (Vec3 pos, int id) newData = netVector3.data;
-        var oldData = players[newData.id];
-
         if (isServer)
         {
-            oldData.position = newData.pos;
-            players[newData.id] = oldData;
-            Broadcast(data);
+            AddClient(ip);
+
+            NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
+            NetServerToClient netServerToClient = new NetServerToClient();
+
+            string newName = netClientToServerHs.Deserialize(data);
+            Player player = new Player();
+
+            player.name = newName;
+            player.clientID = ipToId[ip];
+            player.hp = 2;
+            player.position = Vec3.FromVector3(Vector3.one * player.clientID);
+            players.Add(player);
+
+            Instantiate(bodyPrefab, player.position.ToVector3(), Quaternion.identity);
+
+            netServerToClient.data = players.ToArray();
+
+            Broadcast(netServerToClient.Serialize());
         }
         else
         {
-            if (newData.id == thisPlayer.clientID)
-                return;
+            NetServerToClient netServerToClient = new NetServerToClient();
 
-            oldData.position = newData.pos;
-            players[newData.id] = oldData;
+            Player[] newPlayers = netServerToClient.Deserialize(data);
+            List<Player> playersList = new List<Player>();
+
+            // Player recognizes itself from the list and removes himself
+            for (int i = 0; i < newPlayers.Length; i++)
+            {
+                GameObject body = Instantiate(bodyPrefab, Vector3.one * newPlayers[i].clientID, Quaternion.identity);
+                Vector3 position;
+                position.x = newPlayers[i].position.x;
+                position.y = newPlayers[i].position.y * i;
+                position.z = newPlayers[i].position.z;
+                body.transform.position = position;
+
+                if (newPlayers[i].name != thisPlayer.name) continue;
+
+                thisPlayer = newPlayers[i];
+                playersList = newPlayers.ToList();
+                playersList.Remove(newPlayers[i]);
+            }
+
+            players = playersList;
         }
     }
 
-
-    void AddClient(IPEndPoint ip)
+    private void SendHandshake(string name)
     {
-        if (!ipToId.ContainsKey(ip))
-        {
-            int id = clientId;
-            ipToId[ip] = clientId;
+        NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
 
-            clients.Add(clientId, new Client(ip, id, DateTime.UtcNow.Ticks));
-            SendHandshake(thisPlayer.name);
+        netClientToServerHs.data = name;
+        thisPlayer.name = name;
 
-            clientId++;
-        }
+        SendToServer(netClientToServerHs.Serialize());
     }
 
-
-    void RemoveClient(IPEndPoint ip)
+    private void AddClient(IPEndPoint ip)
     {
-        if (ipToId.ContainsKey(ip))
-        {
-            clients.Remove(ipToId[ip]);
-        }
+        if (ipToId.ContainsKey(ip)) return;
+
+        int id = clientId;
+        ipToId[ip] = clientId;
+
+        clients.Add(clientId, new Client(ip, id, DateTime.UtcNow));
+
+        clientId++;
     }
 
+    private void RemoveClient(IPEndPoint ip)
+    {
+        if (!ipToId.TryGetValue(ip, out var id)) return;
+
+        clients.Remove(id);
+        players.Remove(players.FirstOrDefault(player => player.clientID == ipToId[ip]));
+    }
 
     /// <summary>
     /// Client updates time and sends ping
     /// </summary>
-    /// <param name="data"></param>
     private void SendPing()
     {
-        time = DateTime.UtcNow.Ticks;
+        time = DateTime.UtcNow;
 
         SendToServer(BitConverter.GetBytes((int)MessageType.Pong));
 
@@ -177,7 +237,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     {
         var client = clients[ipToId[ip]];
 
-        client.timeStamp = DateTime.UtcNow.Ticks;
+        client.timeStamp = DateTime.UtcNow;
 
         clients[ipToId[ip]] = client;
 
@@ -189,97 +249,26 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         MS = Math.Round(TimeSpan.FromTicks(ticks).TotalMilliseconds, 2);
     }
 
-    private void RecieveHandshake(byte[] data, IPEndPoint ip)
+    private void MovePlayers(byte[] data)
     {
+        NetVector3 netVector3 = new NetVector3(data);
+        (Vector3 pos, int id) newData = netVector3.data;
+        var oldData = players[newData.id];
+
         if (isServer)
         {
-            AddClient(ip);
-
-            NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
-            NetServerToClient netServerToClient = new NetServerToClient();
-
-            string name = netClientToServerHs.Deserialize(data);
-            Player player = new Player();
-
-            player.name = name;
-            player.clientID = clientId;
-            player.hp = 2;
-            System.Numerics.Vector3 vector3 = System.Numerics.Vector3.One * clientId;
-            player.position = Vec3.FromVector3(vector3);
-            players.Add(player);
-
-            netServerToClient.data = players.ToArray();
-            
-            Broadcast(netServerToClient.Serialize());
+            oldData.position = Vec3.FromVector3(newData.pos);
+            players[newData.id] = oldData;
+            Broadcast(data);
         }
         else
         {
-            NetServerToClient netServerToClient = new NetServerToClient();
+            if (newData.id == thisPlayer.clientID)
+                return;
 
-            Player[] newPlayers = netServerToClient.Deserialize(data);
-            List<Player> playersList = new List<Player>();
-
-            // Player recognizes itself from the list and removes himself
-            for (int i = 0; i < newPlayers.Length; i++)
-            {
-                GameObject body = Instantiate(bodyPrefab, Vector3.one * newPlayers[i].clientID, Quaternion.identity);
-                Vector3 position;
-                position.x = newPlayers[i].position.x;
-                position.y = newPlayers[i].position.y;
-                position.z = newPlayers[i].position.z;
-                body.transform.position = position;
-
-                if (newPlayers[i].name != thisPlayer.name) continue;
-
-                thisPlayer = newPlayers[i];
-                playersList = newPlayers.ToList();
-                playersList.Remove(newPlayers[i]);
-                break;
-            }
-
-            players = playersList;
+            oldData.position = Vec3.FromVector3(newData.pos);
+            players[newData.id] = oldData;
         }
-    }
-
-    private void SendHandshake(string name)
-    {
-        NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
-
-        netClientToServerHs.data = name;
-        thisPlayer.name = name;
-
-        SendToServer(netClientToServerHs.Serialize());
-    }
-
-
-    private MessageType CheckMessageType(byte[] data)
-    {
-        return (MessageType)BitConverter.ToInt32(data);
-    }
-
-    public void SendToServer(byte[] data)
-    {
-        connection.Send(data);
-    }
-
-    public void Broadcast(byte[] data)
-    {
-        using (var iterator = clients.GetEnumerator())
-        {
-            while (iterator.MoveNext())
-            {
-                connection.Send(data, iterator.Current.Value.ipEndPoint);
-            }
-        }
-    }
-
-    void Update()
-    {
-        // Flush the data in main thread
-        if (connection != null)
-            connection.FlushReceiveData();
-
-        CheckPings();
     }
 
     private void CheckPings()
@@ -289,10 +278,20 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         if (isServer)
         {
             bool clientRemoved = false;
-            foreach (var client in clients.Values.Where(client => client.timeStamp + TimeOut < DateTime.UtcNow.Ticks))
+            List<IPEndPoint> clientsToRemove = new List<IPEndPoint>();
+            foreach (var client in clients.Values)
             {
-                RemoveClient(client.ipEndPoint);
+                DateTime timeOutTime = client.timeStamp;
+
+                if (timeOutTime.AddSeconds(TimeOut) > DateTime.UtcNow) continue;
+
+                clientsToRemove.Add(client.ipEndPoint);
                 clientRemoved = true;
+            }
+
+            foreach (var client in clientsToRemove)
+            {
+                RemoveClient(client);
             }
 
             if (clientRemoved)
@@ -302,15 +301,15 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         }
         else
         {
-            if (time + TimeOut < DateTime.UtcNow.Ticks)
+            DateTime timeOutTime = time.AddSeconds(TimeOut);
+            if (timeOutTime < DateTime.UtcNow)
             {
-                //TODO client disconnects itself
                 Disconnect();
             }
         }
     }
 
-    public void Disconnect()
+    private void Disconnect()
     {
         connection.Close();
 #if UNITY_EDITOR

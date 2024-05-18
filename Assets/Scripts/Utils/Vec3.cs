@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Numerics;
+using UnityEngine;
 
 namespace Utils
 {
@@ -24,7 +24,7 @@ namespace Utils
 
         public static Vec3 FromVector3(Vector3 vector3)
         {
-            return new Vec3(vector3.X, vector3.Y, vector3.Z);
+            return new Vec3(vector3.x, vector3.y, vector3.z);
         }
     }
 }

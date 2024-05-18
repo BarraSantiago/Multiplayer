@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using Game;
+using UnityEngine;
 using Utils;
 
 
@@ -98,10 +99,10 @@ public class NetServerToClient : IMessage<Player[]>
     }
 }
 
-public class NetVector3 : IMessage<(Vec3 pos, int id)>
+public class NetVector3 : IMessage<(Vector3 pos, int id)>
 {
     private static ulong lastMsgID = 0;
-    public (Vec3 pos, int id) data;
+    public (Vector3 pos, int id) data;
     
 
     public NetVector3(byte[] data)
@@ -109,7 +110,7 @@ public class NetVector3 : IMessage<(Vec3 pos, int id)>
         this.data = Deserialize(data);
     }
 
-    public (Vec3 pos, int id) Deserialize(byte[] message)
+    public (Vector3 pos, int id) Deserialize(byte[] message)
     {
         BinaryFormatter binaryFormatter = new BinaryFormatter();
 
@@ -120,7 +121,7 @@ public class NetVector3 : IMessage<(Vec3 pos, int id)>
 
         using MemoryStream memoryStream = new MemoryStream(newData);
 
-        return ((Vec3 pos, int id))binaryFormatter.Deserialize(memoryStream);
+        return ((Vector3 pos, int id))binaryFormatter.Deserialize(memoryStream);
     }
 
     public MessageType GetMessageType()
