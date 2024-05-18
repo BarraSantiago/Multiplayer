@@ -2,9 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using Game;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Serialization;
+using Utils;
 
 public struct Client
 {
@@ -20,14 +21,6 @@ public struct Client
     }
 }
 
-[Serializable]
-public struct Player
-{
-    public int clientID;
-    public string name;
-    public int hp;
-    [FormerlySerializedAs("position")] public Transform transform;
-}
 
 public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveData
 {
@@ -38,7 +31,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     public bool isServer { get; private set; }
 
     public int TimeOut = 10;
-    public static float MS { get; private set; } = 0;
+    public static double MS { get; private set; } = 0;
     public Action<byte[], IPEndPoint> OnReceiveEvent;
     public GameObject bodyPrefab;
 
@@ -116,22 +109,22 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     private void MovePlayers(byte[] data)
     {
         NetVector3 netVector3 = new NetVector3(data);
-        Player newData = netVector3.Deserialize(data);
-        var oldData = players[newData.clientID];
+        (Vec3 pos, int id) newData = netVector3.data;
+        var oldData = players[newData.id];
 
         if (isServer)
         {
-            oldData.transform = newData.transform;
-            players[newData.clientID] = oldData;
+            oldData.position = newData.pos;
+            players[newData.id] = oldData;
             Broadcast(data);
         }
         else
         {
-            if (newData.clientID == thisPlayer.clientID)
+            if (newData.id == thisPlayer.clientID)
                 return;
 
-            oldData.transform = newData.transform;
-            players[newData.clientID] = oldData;
+            oldData.position = newData.pos;
+            players[newData.id] = oldData;
         }
     }
 
@@ -140,8 +133,6 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     {
         if (!ipToId.ContainsKey(ip))
         {
-            Debug.Log("Adding client: " + ip.Address);
-
             int id = clientId;
             ipToId[ip] = clientId;
 
@@ -157,8 +148,6 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
     {
         if (ipToId.ContainsKey(ip))
         {
-            Debug.Log("Removing client: " + ip.Address);
-            
             clients.Remove(ipToId[ip]);
         }
     }
@@ -173,6 +162,11 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         time = DateTime.UtcNow.Ticks;
 
         SendToServer(BitConverter.GetBytes((int)MessageType.Pong));
+
+        long ticks = DateTime.UtcNow.Ticks - (long)MS;
+
+        // Convert ticks to milliseconds
+        MS = TimeSpan.FromTicks(ticks).TotalMilliseconds;
     }
 
     /// <summary>
@@ -188,6 +182,11 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         clients[ipToId[ip]] = client;
 
         connection.Send(BitConverter.GetBytes((int)MessageType.Ping), ip);
+
+        long ticks = DateTime.UtcNow.Ticks - (long)MS;
+
+        // Convert ticks to milliseconds
+        MS = Math.Round(TimeSpan.FromTicks(ticks).TotalMilliseconds, 2);
     }
 
     private void RecieveHandshake(byte[] data, IPEndPoint ip)
@@ -197,6 +196,7 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             AddClient(ip);
 
             NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
+            NetServerToClient netServerToClient = new NetServerToClient();
 
             string name = netClientToServerHs.Deserialize(data);
             Player player = new Player();
@@ -204,11 +204,13 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             player.name = name;
             player.clientID = clientId;
             player.hp = 2;
-            player.transform = bodyPrefab.transform;
-            player.transform.position = Vector3.one * clientId;
+            System.Numerics.Vector3 vector3 = System.Numerics.Vector3.One * clientId;
+            player.position = Vec3.FromVector3(vector3);
             players.Add(player);
 
-            // TODO aca el server deberia mandarle a todos los clientes la lista nueva de clientes
+            netServerToClient.data = players.ToArray();
+            
+            Broadcast(netServerToClient.Serialize());
         }
         else
         {
@@ -221,7 +223,12 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
             for (int i = 0; i < newPlayers.Length; i++)
             {
                 GameObject body = Instantiate(bodyPrefab, Vector3.one * newPlayers[i].clientID, Quaternion.identity);
-                body.transform.position = newPlayers[i].transform.position;
+                Vector3 position;
+                position.x = newPlayers[i].position.x;
+                position.y = newPlayers[i].position.y;
+                position.z = newPlayers[i].position.z;
+                body.transform.position = position;
+
                 if (newPlayers[i].name != thisPlayer.name) continue;
 
                 thisPlayer = newPlayers[i];
@@ -236,24 +243,12 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
 
     private void SendHandshake(string name)
     {
-        if (isServer)
-        {
-            NetServerToClient netServerToClient = new NetServerToClient();
+        NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
 
-            netServerToClient.data = players.ToArray();
+        netClientToServerHs.data = name;
+        thisPlayer.name = name;
 
-            //TODO update server list of players
-            Broadcast(netServerToClient.Serialize());
-        }
-        else
-        {
-            NetClientToServerHS netClientToServerHs = new NetClientToServerHS();
-
-            netClientToServerHs.data = name;
-            thisPlayer.name = name;
-
-            SendToServer(netClientToServerHs.Serialize());
-        }
+        SendToServer(netClientToServerHs.Serialize());
     }
 
 
@@ -307,8 +302,6 @@ public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveDa
         }
         else
         {
-            MS = DateTime.UtcNow.Ticks - time;
-
             if (time + TimeOut < DateTime.UtcNow.Ticks)
             {
                 //TODO client disconnects itself

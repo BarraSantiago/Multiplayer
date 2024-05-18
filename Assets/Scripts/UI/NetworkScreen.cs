@@ -1,7 +1,8 @@
 ﻿using UnityEngine.UI;
 using System.Net;
+using UnityEngine;
 
-public class NetworkScreen : MonoBehaviourSingleton<NetworkScreen>
+public class NetworkScreen : MonoBehaviour
 {
     public Button connectBtn;
     public Button startServerBtn;
@@ -9,7 +10,7 @@ public class NetworkScreen : MonoBehaviourSingleton<NetworkScreen>
     public InputField addressInputField;
     public InputField nameInputField;
 
-    protected override void Initialize()
+    protected void Awake()
     {
         connectBtn.onClick.AddListener(OnConnectBtnClick);
         startServerBtn.onClick.AddListener(OnStartServerBtnClick);

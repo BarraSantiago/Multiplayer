@@ -1,8 +1,9 @@
 using System.Collections.Generic;
-using UnityEngine;
 using System;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
+using Game;
+using Utils;
 
 
 public enum MessageType
@@ -16,7 +17,6 @@ public enum MessageType
     Dispose,
     Shoot
 }
-
 
 
 public interface IMessage<T>
@@ -91,35 +91,36 @@ public class NetServerToClient : IMessage<Player[]>
 
         List<byte> outData = new List<byte>();
 
-        outData.AddRange(BitConverter.GetBytes(1));
+        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
         outData.AddRange(memoryStream.ToArray());
 
         return outData.ToArray();
     }
 }
 
-public class NetVector3 : IMessage<Player>
+public class NetVector3 : IMessage<(Vec3 pos, int id)>
 {
     private static ulong lastMsgID = 0;
-    private Player data;
+    public (Vec3 pos, int id) data;
+    
 
     public NetVector3(byte[] data)
     {
         this.data = Deserialize(data);
     }
 
-    public Player Deserialize(byte[] message)
+    public (Vec3 pos, int id) Deserialize(byte[] message)
     {
         BinaryFormatter binaryFormatter = new BinaryFormatter();
 
-        byte[] player = new byte[message.Length - 4];
+        byte[] newData = new byte[message.Length - 4];
 
         // Removes the message type from the array
-        Array.Copy(message, 4, player, 0, player.Length);
+        Array.Copy(message, 4, newData, 0, newData.Length);
 
-        using MemoryStream memoryStream = new MemoryStream(player);
+        using MemoryStream memoryStream = new MemoryStream(newData);
 
-        return (Player)binaryFormatter.Deserialize(memoryStream);
+        return ((Vec3 pos, int id))binaryFormatter.Deserialize(memoryStream);
     }
 
     public MessageType GetMessageType()
@@ -136,12 +137,11 @@ public class NetVector3 : IMessage<Player>
 
         List<byte> outData = new List<byte>();
 
-        outData.AddRange(BitConverter.GetBytes(1));
+        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
         outData.AddRange(memoryStream.ToArray());
 
         return outData.ToArray();
     }
-
 }
 
 public class NetConsole : IMessage<string>
@@ -156,7 +156,7 @@ public class NetConsole : IMessage<string>
     public string Deserialize(byte[] message)
     {
         byte[] messageWithoutHeader = new byte[message.Length - 4];
-        
+
         Array.Copy(message, 4, messageWithoutHeader, 0, message.Length - 4);
 
         string outData = System.Text.Encoding.UTF8.GetString(messageWithoutHeader);
