@@ -1,186 +1,194 @@
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.Serialization.Formatters.Binary;
-using Game;
 using UnityEngine;
-using Utils;
 
-
-public enum MessageType
+namespace Network
 {
-    HandShake = -1,
-    Console,
-    Position,
-    Ping,
-    Pong,
-    Close,
-    Dispose,
-    Shoot
-}
-
-
-public interface IMessage<T>
-{
-    public MessageType GetMessageType();
-    public byte[] Serialize();
-    public T Deserialize(byte[] message);
-}
-
-public class NetClientToServerHS : IMessage<string>
-{
-    public string data;
-
-    public string Deserialize(byte[] message)
+    public enum MessageType
     {
-        string outData;
-
-        outData = BitConverter.ToString(message, 4);
-
-        return outData;
+        HandShake = -1,
+        Console,
+        Position,
+        Ping,
+        Pong,
+        Close,
+        Dispose,
+        Shoot
     }
 
-    public MessageType GetMessageType()
+
+    public interface IMessage<T>
     {
-        return MessageType.HandShake;
+        public MessageType GetMessageType();
+        public byte[] Serialize();
+        public T Deserialize(byte[] message);
     }
 
-    public byte[] Serialize()
+    public class NetClientToServerHs : IMessage<string>
     {
-        List<byte> outData = new List<byte>();
+        public string data;
 
-        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
-
-        foreach (char letter in data)
+        public string Deserialize(byte[] message)
         {
-            outData.Add((byte)letter);
+            string outData;
+
+            outData = System.Text.Encoding.UTF8.GetString(message, 4, message.Length - 4);
+
+            return outData;
         }
 
-        return outData.ToArray();
+        public MessageType GetMessageType()
+        {
+            return MessageType.HandShake;
+        }
+
+        public byte[] Serialize()
+        {
+            List<byte> outData = new List<byte>();
+
+            outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+
+            outData.AddRange(data.Select(letter => (byte)letter));
+
+            return outData.ToArray();
+        }
     }
-}
 
-public class NetServerToClient : IMessage<Player[]>
-{
-    public Player[] data;
-
-    public Player[] Deserialize(byte[] message)
+    public class NetServerToClientHs : IMessage<(int ID, string name)[]>
     {
-        BinaryFormatter binaryFormatter = new BinaryFormatter();
+        public (int ID, string name)[] data;
 
-        byte[] playerArray = new byte[message.Length - 4];
+        public (int ID, string name)[] Deserialize(byte[] message)
+        {
+            BinaryFormatter binaryFormatter = new BinaryFormatter();
 
-        // Removes the message type from the array
-        Array.Copy(message, 4, playerArray, 0, playerArray.Length);
+            byte[] playerArray = new byte[message.Length - 4];
 
-        using MemoryStream memoryStream = new MemoryStream(playerArray);
+            // Removes the message type from the array
+            Array.Copy(message, 4, playerArray, 0, playerArray.Length);
 
-        return (Player[])binaryFormatter.Deserialize(memoryStream);
+            using MemoryStream memoryStream = new MemoryStream(playerArray);
+
+            return ((int ID, string name)[])binaryFormatter.Deserialize(memoryStream);
+        }
+
+        public MessageType GetMessageType()
+        {
+            return MessageType.HandShake;
+        }
+
+        public byte[] Serialize()
+        {
+            BinaryFormatter binaryFormatter = new BinaryFormatter();
+            MemoryStream memoryStream = new MemoryStream();
+
+            binaryFormatter.Serialize(memoryStream, data);
+
+            memoryStream.Position = 0;
+
+            List<byte> outData = new List<byte>();
+
+            outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+            outData.AddRange(memoryStream.ToArray());
+
+            return outData.ToArray();
+        }
     }
 
-    public MessageType GetMessageType()
+    public class NetVector3 : IMessage<(Vector3 pos, int id)>
     {
-        return MessageType.HandShake;
-    }
-
-    public byte[] Serialize()
-    {
-        BinaryFormatter binaryFormatter = new BinaryFormatter();
-        using MemoryStream memoryStream = new MemoryStream();
-
-        binaryFormatter.Serialize(memoryStream, data);
-
-        List<byte> outData = new List<byte>();
-
-        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
-        outData.AddRange(memoryStream.ToArray());
-
-        return outData.ToArray();
-    }
-}
-
-public class NetVector3 : IMessage<(Vector3 pos, int id)>
-{
-    private static ulong lastMsgID = 0;
-    public (Vector3 pos, int id) data;
+        private static ulong lastMsgID = 0;
+        public (Vector3 pos, int id) data;
     
-
-    public NetVector3(byte[] data)
-    {
-        this.data = Deserialize(data);
-    }
-
-    public (Vector3 pos, int id) Deserialize(byte[] message)
-    {
-        BinaryFormatter binaryFormatter = new BinaryFormatter();
-
-        byte[] newData = new byte[message.Length - 4];
-
-        // Removes the message type from the array
-        Array.Copy(message, 4, newData, 0, newData.Length);
-
-        using MemoryStream memoryStream = new MemoryStream(newData);
-
-        return ((Vector3 pos, int id))binaryFormatter.Deserialize(memoryStream);
-    }
-
-    public MessageType GetMessageType()
-    {
-        return MessageType.Position;
-    }
-
-    public byte[] Serialize()
-    {
-        BinaryFormatter binaryFormatter = new BinaryFormatter();
-        using MemoryStream memoryStream = new MemoryStream();
-
-        binaryFormatter.Serialize(memoryStream, data);
-
-        List<byte> outData = new List<byte>();
-
-        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
-        outData.AddRange(memoryStream.ToArray());
-
-        return outData.ToArray();
-    }
-}
-
-public class NetConsole : IMessage<string>
-{
-    public string data;
-
-    public MessageType messageType()
-    {
-        return MessageType.Console;
-    }
-
-    public string Deserialize(byte[] message)
-    {
-        byte[] messageWithoutHeader = new byte[message.Length - 4];
-
-        Array.Copy(message, 4, messageWithoutHeader, 0, message.Length - 4);
-
-        string outData = System.Text.Encoding.UTF8.GetString(messageWithoutHeader);
-
-        return outData;
-    }
-
-    public MessageType GetMessageType()
-    {
-        return MessageType.HandShake;
-    }
-
-    public byte[] Serialize()
-    {
-        List<byte> outData = new List<byte>();
-
-        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
-
-        foreach (char letter in data)
+        public NetVector3(Vector3 pos, int id)
         {
-            outData.Add((byte)letter);
+            data = (pos, id);
+        } 
+        public NetVector3(byte[] data)
+        {
+            this.data = Deserialize(data);
         }
 
-        return outData.ToArray();
+        public (Vector3 pos, int id) Deserialize(byte[] message)
+        {
+            int offset = 4; // Skip the message type
+
+            // Read pos (Vector3) from the byte array
+            float x = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
+            float y = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
+            float z = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
+            Vector3 pos = new Vector3(x, y, z);
+
+            // Read id from the byte array
+            int id = BitConverter.ToInt32(message, offset);
+
+            return (pos, id);
+        }
+
+        public MessageType GetMessageType()
+        {
+            return MessageType.Position;
+        }
+
+        public byte[] Serialize()
+        {
+            List<byte> outData = new List<byte>();
+
+            outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+
+            outData.AddRange(BitConverter.GetBytes(data.pos.x));
+            outData.AddRange(BitConverter.GetBytes(data.pos.y));
+            outData.AddRange(BitConverter.GetBytes(data.pos.z));
+
+            outData.AddRange(BitConverter.GetBytes(data.id));
+
+            return outData.ToArray();
+        }
+    }
+
+    public class NetConsole : IMessage<string>
+    {
+        public string data;
+
+        public MessageType messageType()
+        {
+            return MessageType.Console;
+        }
+
+        public string Deserialize(byte[] message)
+        {
+            byte[] messageWithoutHeader = new byte[message.Length - 4];
+
+            Array.Copy(message, 4, messageWithoutHeader, 0, message.Length - 4);
+
+            string outData = System.Text.Encoding.UTF8.GetString(messageWithoutHeader);
+
+            return outData;
+        }
+
+        public MessageType GetMessageType()
+        {
+            return MessageType.HandShake;
+        }
+
+        public byte[] Serialize()
+        {
+            List<byte> outData = new List<byte>();
+
+            outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+
+            foreach (char letter in data)
+            {
+                outData.Add((byte)letter);
+            }
+
+            return outData.ToArray();
+        }
     }
 }

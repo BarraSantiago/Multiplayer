@@ -1,5 +1,6 @@
 ﻿using UnityEngine.UI;
 using System.Net;
+using UI;
 using UnityEngine;
 
 public class NetworkScreen : MonoBehaviour
@@ -30,9 +31,8 @@ public class NetworkScreen : MonoBehaviour
     void OnStartServerBtnClick()
     {
         int port = System.Convert.ToInt32(portInputField.text);
-        string name = nameInputField.text;
 
-        NetworkManager.Instance.StartServer(port, name);
+        NetworkManager.Instance.StartServer(port);
         SwitchToChatScreen();
     }
 

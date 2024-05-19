@@ -1,48 +1,51 @@
 ﻿using System;
 using System.Net;
+using Network;
 using UnityEngine.UI;
 
-public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
+namespace UI
 {
-    public Text messages;
-    public Text ms;
-    public InputField inputMessage;
-
-    protected override void Initialize()
+    public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
     {
-        inputMessage.onEndEdit.AddListener(OnEndEdit);
+        public Text messages;
+        public Text ms;
+        public InputField inputMessage;
 
-        this.gameObject.SetActive(false);
-
-        NetworkManager.Instance.OnReceiveEvent += OnReceiveDataEvent;
-    }
-
-    private void Update()
-    {
-        ms.text = "MS: " + NetworkManager.MS.ToString("");
-    }
-
-    void OnReceiveDataEvent(byte[] data, IPEndPoint ep)
-    {
-        NetConsole console = new NetConsole();
-
-        if (NetworkManager.Instance.isServer)
+        protected override void Initialize()
         {
-            NetworkManager.Instance.Broadcast(data);
+            inputMessage.onEndEdit.AddListener(OnEndEdit);
+
+            this.gameObject.SetActive(false);
+
+            NetworkManager.Instance.OnReceiveEvent += OnReceiveDataEvent;
         }
 
-        messages.text += console.Deserialize(data) + System.Environment.NewLine;
-    }
-
-    void OnEndEdit(string str)
-    {
-        if (inputMessage.text != "")
+        private void Update()
         {
-            if (NetworkManager.Instance.isServer)
+            ms.text = "MS: " + NetworkManager.Instance.MS.ToString("");
+        }
+
+        private void OnReceiveDataEvent(byte[] data, IPEndPoint ep)
+        {
+            NetConsole console = new NetConsole();
+
+            if (NetworkManager.Instance.IsServer)
+            {
+                NetworkManager.Instance.Broadcast(data);
+            }
+
+            messages.text += console.Deserialize(data) + System.Environment.NewLine;
+        }
+
+        private void OnEndEdit(string str)
+        {
+            if (inputMessage.text == "") return;
+        
+            if (NetworkManager.Instance.IsServer)
             {
                 int numberToAdd = (int)MessageType.Console;
                 byte[] numberToAddBytes = BitConverter.GetBytes(numberToAdd);
-                byte[] messageBytes = System.Text.ASCIIEncoding.UTF8.GetBytes(NetworkManager.thisPlayer.name + ": "+ str);
+                byte[] messageBytes = System.Text.Encoding.UTF8.GetBytes(NetworkManager.Instance.thisPlayer.name + ": "+ str);
 
                 byte[] combinedBytes = new byte[numberToAddBytes.Length + messageBytes.Length];
                 Buffer.BlockCopy(numberToAddBytes, 0, combinedBytes, 0, numberToAddBytes.Length);
@@ -50,13 +53,13 @@ public class ChatScreen : MonoBehaviourSingleton<ChatScreen>
 
                 NetworkManager.Instance.Broadcast(combinedBytes);
                 
-                messages.text += NetworkManager.thisPlayer.name + ": " + str + System.Environment.NewLine;
+                messages.text += NetworkManager.Instance.thisPlayer.name + ": " + str + System.Environment.NewLine;
             }
             else
             {
                 int numberToAdd = (int)MessageType.Console;
                 byte[] numberToAddBytes = BitConverter.GetBytes(numberToAdd);
-                byte[] messageBytes = System.Text.ASCIIEncoding.UTF8.GetBytes( NetworkManager.thisPlayer.name + ": "+ str);
+                byte[] messageBytes = System.Text.Encoding.UTF8.GetBytes( NetworkManager.Instance.thisPlayer.name + ": "+ str);
 
                 byte[] combinedBytes = new byte[numberToAddBytes.Length + messageBytes.Length];
                 Buffer.BlockCopy(numberToAddBytes, 0, combinedBytes, 0, numberToAddBytes.Length);
