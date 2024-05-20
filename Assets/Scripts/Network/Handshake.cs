@@ -12,13 +12,15 @@ namespace Network
     {
         public static Action<GameObject> onPlayerSpawned;
         public GameObject bodyPrefab;
+        public Material playerMaterial;
         private int _clientId = 0;
-        
+
         private void AddClient(IPEndPoint ip)
         {
             if (NetworkManager.Instance.IPToId.ContainsKey(ip)) return;
 
             int id = _clientId;
+            
             NetworkManager.Instance.IPToId[ip] = _clientId;
 
             NetworkManager.Instance.Clients.Add(_clientId, new Client(ip, id, DateTime.UtcNow));
@@ -33,20 +35,24 @@ namespace Network
             NetClientToServerHs netClientToServerHs = new NetClientToServerHs();
 
             string newName = netClientToServerHs.Deserialize(data);
-            Player player = new Player();
+            
+            Vec3 pos = Vec3.FromVector3(Vector3.up * NetworkManager.Instance.IPToId[ip]);
+            
+            Player player = new Player
+            {
+                name = newName,
+                clientID = NetworkManager.Instance.IPToId[ip],
+                hp = 3,
+                position = pos,
+                body = Instantiate(bodyPrefab, pos.ToVector3(), Quaternion.identity),
+                hasBody = true
+            };
 
-            player.name = newName;
-            player.clientID = NetworkManager.Instance.IPToId[ip];
-            player.hp = 2;
-            player.position = Vec3.FromVector3(Vector3.one * player.clientID);
-
-            player.body = Instantiate(bodyPrefab, player.position.ToVector3(), Quaternion.identity);
-            player.hasBody = true;
             player.body.transform.name = player.clientID.ToString();
             return player;
         }
 
-        public Dictionary<int, Player> ClientRecieveHandshake(byte[] data, Dictionary<int, Player> _players, Player thisPlayer)
+        public Dictionary<int, Player> ClientRecieveHandshake(byte[] data)
         {
             NetServerToClientHs netServerToClientHs = new NetServerToClientHs();
 
@@ -56,16 +62,17 @@ namespace Network
 
             for (int i = 0; i < newPlayers.Length; i++)
             {
-                if (_players != null && _players.Any(player => player.Value.clientID == newPlayers[i].ID)) continue;
-                
+                if (NetworkManager.Instance.Players != null &&
+                    NetworkManager.Instance.Players.Any(player => player.Value.clientID == newPlayers[i].ID)) continue;
+
                 GameObject body = Instantiate(bodyPrefab, Vector3.one * newPlayers[i].ID, Quaternion.identity);
                 Vector3 position;
-                position.x = 1;
+                position.x = 0;
                 position.y = 1 * i;
-                position.z = 1;
+                position.z = 0;
                 body.transform.position = position;
 
-                if (newPlayers[i].ID != thisPlayer.clientID)
+                if (newPlayers[i].ID != NetworkManager.Instance.thisPlayer.clientID)
                 {
                     playersList.Add(newPlayers[i].ID, new Player
                     {
@@ -78,11 +85,15 @@ namespace Network
                     });
                 }
 
-                if (newPlayers[i].name != thisPlayer.name && !thisPlayer.hasBody) continue;
-
+                if (NetworkManager.Instance.thisPlayer.hasBody) Destroy(body);
+                
+                if (newPlayers[i].name != NetworkManager.Instance.thisPlayer.name &&
+                    !NetworkManager.Instance.thisPlayer.hasBody) continue;
+                
+                body.GetComponent<MeshRenderer>().material = playerMaterial;
                 onPlayerSpawned?.Invoke(body);
-                thisPlayer.clientID = newPlayers[i].ID;
-                thisPlayer.hasBody = true;
+                NetworkManager.Instance.thisPlayer.clientID = newPlayers[i].ID;
+                NetworkManager.Instance.thisPlayer.hasBody = true;
             }
 
             return playersList;

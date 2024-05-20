@@ -1,4 +1,4 @@
-﻿using System;
+﻿using Network;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Utils;
@@ -7,21 +7,14 @@ namespace Game
 {
     public class PlayerController : MonoBehaviour
     {
-        public static Action<Vec3> onMove;
 
         [SerializeField] private float speed = 5f;
-        [SerializeField] private GameObject bulletPrefab;
 
+        public GameObject bulletPrefab;
         public GameObject configMenu;
 
-        private CharacterController characterController;
         private Vector2 _direction;
-
-        private void Awake()
-        {
-            characterController = gameObject.AddComponent<CharacterController>();
-        }
-
+        
         private void Update()
         {
             MovePlayer();
@@ -31,8 +24,9 @@ namespace Game
         {
             if (_direction == Vector2.zero) return;
             Vector3 movement = new Vector3(_direction.x, _direction.y, 0);
-            characterController.Move(movement * (speed * Time.deltaTime));
-            onMove?.Invoke(Vec3.FromVector3(transform.position));
+            transform.position += movement * (speed * Time.deltaTime);
+            
+            NetworkManager.Instance.MovePlayer(Vec3.FromVector3(transform.position));
         }
 
         public void OnMove(InputValue context)
@@ -42,6 +36,19 @@ namespace Game
 
         public void OnFire(InputValue context)
         {
+            // Instantiate the bullet
+            GameObject bullet = Instantiate(bulletPrefab);
+
+            Vector3 screenPosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y, -Camera.main.transform.position.z);
+            Vector3 mousePosition = Camera.main.ScreenToWorldPoint(screenPosition);
+            Vector3 direction = (mousePosition - transform.position).normalized;
+
+            direction.z = 0;
+            
+            bullet.transform.position = transform.position + direction;
+
+            bullet.AddComponent<Bullet>().SetTarget(direction);
+            NetworkManager.Instance.FireBullet( Vec3.FromVector3(bullet.transform.position), Vec3.FromVector3(direction));
         }
 
         public void OnPause(InputValue context)

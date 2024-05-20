@@ -257,9 +257,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0f30c9f44b7174d45b74c4ae777e3447, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  timeOut: 5
+  bulletPrefab: {fileID: 5697644516708750416, guid: 161077fa5f8ccc842801f5cbe760bb52,
+    type: 3}
   bodyPrefab: {fileID: 794701924043253740, guid: 41692726f0612d545b71d4fc55a547b3,
     type: 3}
+  playerMaterial: {fileID: 2100000, guid: 6470af5b616faea4185c0eb9a7f9a04f, type: 2}
+  thisPlayer:
+    clientID: 0
+    name: 
+    hp: 0
+    position:
+      x: 0
+      y: 0
+      z: 0
+    hasBody: 0
+    body: {fileID: 0}
+  timeOut: 5
 --- !u!4 &180350410
 Transform:
   m_ObjectHideFlags: 0
@@ -1252,6 +1265,8 @@ MonoBehaviour:
   inputMap: {fileID: -944628639613478452, guid: ca9f5fa95ffab41fb9a615ab714db018,
     type: 3}
   configMenu: {fileID: 1389537118}
+  bulletPrefab: {fileID: 5697644516708750416, guid: 161077fa5f8ccc842801f5cbe760bb52,
+    type: 3}
   resume: {fileID: 1789537406}
   quit: {fileID: 1898328527}
 --- !u!4 &653412865
@@ -2645,7 +2660,7 @@ BoxCollider:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1689463022}
   m_Material: {fileID: 0}
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_Enabled: 1
   serializedVersion: 2
   m_Size: {x: 1, y: 1, z: 1}
@@ -2708,8 +2723,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1689463022}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 1.86}
-  m_LocalScale: {x: 26.269499, y: 26.269499, z: 1.7513}
+  m_LocalPosition: {x: 1.1238, y: -0.1342, z: 4.5}
+  m_LocalScale: {x: 51.035152, y: 37.44854, z: 1.7513}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}

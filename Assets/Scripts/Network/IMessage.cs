@@ -102,11 +102,12 @@ namespace Network
     {
         private static ulong lastMsgID = 0;
         public (Vector3 pos, int id) data;
-    
+
         public NetVector3(Vector3 pos, int id)
         {
             data = (pos, id);
-        } 
+        }
+
         public NetVector3(byte[] data)
         {
             this.data = Deserialize(data);
@@ -145,6 +146,73 @@ namespace Network
             outData.AddRange(BitConverter.GetBytes(data.pos.x));
             outData.AddRange(BitConverter.GetBytes(data.pos.y));
             outData.AddRange(BitConverter.GetBytes(data.pos.z));
+
+            outData.AddRange(BitConverter.GetBytes(data.id));
+
+            return outData.ToArray();
+        }
+    }
+
+    public class NetShoot : IMessage<(Vector3 pos, Vector3 dir, int id)>
+    {
+        public (Vector3 pos, Vector3 dir, int id) data;
+
+        public NetShoot(Vector3 pos, Vector3 dir, int id)
+        {
+            data = (pos, dir, id);
+        }
+
+        public NetShoot(byte[] data)
+        {
+            this.data = Deserialize(data);
+        }
+
+        public (Vector3 pos, Vector3 dir, int id) Deserialize(byte[] message)
+        {
+            int offset = 4; 
+
+            // pos
+            float x = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
+            float y = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
+            float z = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
+            Vector3 pos = new Vector3(x, y, z);
+
+            // dir
+            x = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
+            y = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
+            z = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
+            Vector3 dir = new Vector3(x, y, z);
+
+            // id
+            int id = BitConverter.ToInt32(message, offset);
+
+            return (pos, dir, id);
+        }
+
+        public MessageType GetMessageType()
+        {
+            return MessageType.Shoot;
+        }
+
+        public byte[] Serialize()
+        {
+            List<byte> outData = new List<byte>();
+
+            outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+
+            outData.AddRange(BitConverter.GetBytes(data.pos.x));
+            outData.AddRange(BitConverter.GetBytes(data.pos.y));
+            outData.AddRange(BitConverter.GetBytes(data.pos.z));
+
+            outData.AddRange(BitConverter.GetBytes(data.dir.x));
+            outData.AddRange(BitConverter.GetBytes(data.dir.y));
+            outData.AddRange(BitConverter.GetBytes(data.dir.z));
 
             outData.AddRange(BitConverter.GetBytes(data.id));
 
