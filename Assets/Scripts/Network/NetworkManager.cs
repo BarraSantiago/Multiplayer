@@ -28,7 +28,7 @@ namespace Network
         [SerializeField] private GameObject bulletPrefab;
         [SerializeField] private GameObject bodyPrefab;
         [SerializeField] private Material playerMaterial;
-    
+
         public readonly Dictionary<IPEndPoint, int> IPToId = new Dictionary<IPEndPoint, int>();
         public readonly Dictionary<int, Client> Clients = new Dictionary<int, Client>();
         public Dictionary<int, Player> Players = new Dictionary<int, Player>();
@@ -38,7 +38,7 @@ namespace Network
         public int Port { get; private set; }
         public bool IsServer { get; private set; }
         public int timeOut = 10;
-        
+
         public Action<byte[], IPEndPoint> OnReceiveEvent;
         public Action<GameObject> OnPlayerSpawned;
 
@@ -51,7 +51,6 @@ namespace Network
         {
             _handshake = gameObject.AddComponent<Handshake>();
             _handshake.bodyPrefab = bodyPrefab;
-            _handshake.playerMaterial = playerMaterial;
         }
 
         public void StartServer(int port)
@@ -67,17 +66,17 @@ namespace Network
 
             this.Port = port;
             this.IPAddress = ip;
-            
+
             GameObject body = Instantiate(bodyPrefab);
             body.GetComponent<MeshRenderer>().material = playerMaterial;
             thisPlayer = body.AddComponent<Player>();
             thisPlayer.name = name;
             OnPlayerSpawned?.Invoke(body);
-            
-            
+
+
             _connection = new UdpConnection(ip, port, this);
             _time = DateTime.UtcNow;
-        
+
             SendToServer(_handshake.PrepareHandshake(name));
             SendPing();
         }
@@ -92,7 +91,7 @@ namespace Network
 
         private void OnDestroy()
         {
-            Disconnect();
+            CheckDisconnect();
         }
 
         public void SendToServer(byte[] data)
@@ -114,7 +113,7 @@ namespace Network
         {
             return (MessageType)BitConverter.ToInt32(data);
         }
-        
+
         public int CalculateChecksum(byte[] data)
         {
             int checksum = 0;
@@ -122,6 +121,7 @@ namespace Network
             {
                 checksum += b;
             }
+
             return checksum;
         }
 
@@ -141,7 +141,7 @@ namespace Network
                 Debug.LogError("Data is corrupted");
                 return;
             }
-            
+
             MessageType messageType = CheckMessageType(data);
 
             switch (messageType)
@@ -167,6 +167,15 @@ namespace Network
                     break;
 
                 case MessageType.Close:
+                    if (IsServer)
+                    {
+                        RemoveClient(ip);
+                    }
+                    else
+                    {
+                        Disconnect();
+                    }
+
                     break;
 
                 case MessageType.Dispose:
@@ -195,8 +204,8 @@ namespace Network
             }
             else
             {
-                if(newData.id == thisPlayer.clientID) return;
-            
+                if (newData.id == thisPlayer.clientID) return;
+
                 Bullet bullet = Instantiate(bulletPrefab, newData.pos, Quaternion.identity).AddComponent<Bullet>();
                 bullet.SetTarget(newData.target);
                 bullet.clientID = newData.id;
@@ -213,12 +222,12 @@ namespace Network
 
                 Players.Add(IPToId[ip], player);
 
-                (int ID, string name)[] players = new (int ID, string name)[Players.Count];
+                (int ID, string name, Vector3 pos)[] players = new (int ID, string name, Vector3 pos)[Players.Count];
 
                 int i = 0;
                 foreach (var value in Players)
                 {
-                    players[i++] = (value.Key, value.Value.name);
+                    players[i++] = (value.Key, value.Value.name, value.Value.gameObject.transform.position);
                 }
 
                 netServerToClientHs.data = players;
@@ -236,6 +245,7 @@ namespace Network
         {
             if (!IPToId.TryGetValue(ip, out var id)) return;
 
+            _connection.Send(BitConverter.GetBytes((int)MessageType.Close), ip);
             Clients.Remove(id);
             Destroy(Players[IPToId[ip]].gameObject);
             Players.Remove(IPToId[ip]);
@@ -246,19 +256,18 @@ namespace Network
         {
             TimeSpan newDateTime = DateTime.UtcNow - _time;
             MS = (float)newDateTime.Milliseconds;
-            
+
             _time = DateTime.UtcNow;
 
             SendToServer(BitConverter.GetBytes((int)MessageType.Pong));
-
         }
 
         private void SendPong(IPEndPoint ip)
         {
-            if(!IPToId.TryGetValue(ip, out var value)) return;
-            
+            if (!IPToId.TryGetValue(ip, out var value)) return;
+
             var client = Clients[value];
-            
+
             client.timeStamp = DateTime.UtcNow;
 
             Clients[IPToId[ip]] = client;
@@ -266,16 +275,30 @@ namespace Network
             _connection.Send(BitConverter.GetBytes((int)MessageType.Ping), ip);
         }
 
+        public void UpdatePositions()
+        {
+            if (!IsServer) return;
+
+            if (!IsServer) return;
+            foreach (var netVector3 in Clients.Values.Select(client => Players.TryGetValue(client.id, out var player) ? new NetVector3(player.gameObject.transform.position, client.id) : null))
+            {
+                if (netVector3 != null)
+                {
+                    Broadcast(netVector3.Serialize());
+                }
+            }
+        }
+
         private void MovePlayers(byte[] data, IPEndPoint ip)
         {
             NetVector3 netVector3 = new NetVector3(data);
             (Vector3 pos, int id) newData = netVector3.data;
-        
+
 
             if (IsServer)
             {
-                if(!IPToId.TryGetValue(ip, out var value)) return;
-                
+                if (!IPToId.TryGetValue(ip, out var value)) return;
+
                 Player player = Players[value];
                 player.gameObject.transform.position = newData.pos;
                 Players[IPToId[ip]] = player;
@@ -294,7 +317,7 @@ namespace Network
             NetVector3 netVector3 = new NetVector3(pos.ToVector3(), thisPlayer.clientID);
             SendToServer(netVector3.Serialize());
         }
-    
+
         public void FireBullet(Vec3 pos, Vec3 dire)
         {
             NetShoot netVector3 = new NetShoot(pos.ToVector3(), dire.ToVector3(), thisPlayer.clientID);
@@ -309,7 +332,7 @@ namespace Network
             {
                 bool clientRemoved = false;
                 List<IPEndPoint> clientsToRemove = new List<IPEndPoint>();
-                
+
                 foreach (var client in Clients.Values)
                 {
                     DateTime timeOutTime = client.timeStamp;
@@ -335,14 +358,18 @@ namespace Network
                 DateTime timeOutTime = _time.AddSeconds(timeOut);
                 if (timeOutTime < DateTime.UtcNow)
                 {
-                    Disconnect();
+                    CheckDisconnect();
                 }
             }
         }
 
+        public void CheckDisconnect()
+        {
+            SendToServer(BitConverter.GetBytes((int)MessageType.Close));
+        }
+
         public void Disconnect()
         {
-            _connection.Send(BitConverter.GetBytes((int)MessageType.Close));
             _connection.Close();
 #if UNITY_EDITOR
             EditorApplication.isPlaying = false;

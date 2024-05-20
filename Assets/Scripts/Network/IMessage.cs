@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.Serialization.Formatters.Binary;
+using System.Text;
 using UnityEngine;
 
 namespace Network
@@ -57,48 +58,72 @@ namespace Network
         }
     }
 
-    public class NetServerToClientHs : IMessage<(int ID, string name)[]>
+public class NetServerToClientHs : IMessage<(int ID, string name, Vector3 pos)[]>
+{
+    public (int ID, string name, Vector3 pos)[] data;
+
+    public (int ID, string name, Vector3 pos)[] Deserialize(byte[] message)
     {
-        public (int ID, string name)[] data;
+        int offset = 4; // Skip the message type
+        int count = BitConverter.ToInt32(message, offset);
+        offset += sizeof(int);
 
-        public (int ID, string name)[] Deserialize(byte[] message)
+        var result = new (int ID, string name, Vector3 pos)[count];
+
+        for (int i = 0; i < count; i++)
         {
-            BinaryFormatter binaryFormatter = new BinaryFormatter();
+            int id = BitConverter.ToInt32(message, offset);
+            offset += sizeof(int);
 
-            byte[] playerArray = new byte[message.Length - 4];
+            int nameLength = BitConverter.ToInt32(message, offset);
+            offset += sizeof(int);
 
-            // Removes the message type from the array
-            Array.Copy(message, 4, playerArray, 0, playerArray.Length);
+            string name = Encoding.UTF8.GetString(message, offset, nameLength);
+            offset += nameLength;
 
-            using MemoryStream memoryStream = new MemoryStream(playerArray);
+            float x = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
 
-            return ((int ID, string name)[])binaryFormatter.Deserialize(memoryStream);
+            float y = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
+
+            float z = BitConverter.ToSingle(message, offset);
+            offset += sizeof(float);
+
+            result[i] = (id, name, new Vector3(x, y, z));
         }
 
-        public MessageType GetMessageType()
-        {
-            return MessageType.HandShake;
-        }
-
-        public byte[] Serialize()
-        {
-            BinaryFormatter binaryFormatter = new BinaryFormatter();
-            MemoryStream memoryStream = new MemoryStream();
-
-            binaryFormatter.Serialize(memoryStream, data);
-
-            memoryStream.Position = 0;
-
-            List<byte> outData = new List<byte>();
-
-            outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
-            outData.AddRange(memoryStream.ToArray());
-
-            return outData.ToArray();
-        }
+        return result;
     }
 
-    public class NetVector3 : IMessage<(Vector3 pos, int id)>
+    public MessageType GetMessageType()
+    {
+        return MessageType.HandShake;
+    }
+
+    public byte[] Serialize()
+    {
+        List<byte> outData = new List<byte>();
+
+        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+        outData.AddRange(BitConverter.GetBytes(data.Length));
+
+        foreach (var item in data)
+        {
+            outData.AddRange(BitConverter.GetBytes(item.ID));
+
+            byte[] nameBytes = Encoding.UTF8.GetBytes(item.name);
+            outData.AddRange(BitConverter.GetBytes(nameBytes.Length));
+            outData.AddRange(nameBytes);
+
+            outData.AddRange(BitConverter.GetBytes(item.pos.x));
+            outData.AddRange(BitConverter.GetBytes(item.pos.y));
+            outData.AddRange(BitConverter.GetBytes(item.pos.z));
+        }
+
+        return outData.ToArray();
+    }
+}    public class NetVector3 : IMessage<(Vector3 pos, int id)>
     {
         private static ulong lastMsgID = 0;
         public (Vector3 pos, int id) data;
@@ -115,9 +140,9 @@ namespace Network
 
         public (Vector3 pos, int id) Deserialize(byte[] message)
         {
-            int offset = 4; // Skip the message type
+            int offset = 4;
 
-            // Read pos (Vector3) from the byte array
+            // pos
             float x = BitConverter.ToSingle(message, offset);
             offset += sizeof(float);
             float y = BitConverter.ToSingle(message, offset);
@@ -126,7 +151,7 @@ namespace Network
             offset += sizeof(float);
             Vector3 pos = new Vector3(x, y, z);
 
-            // Read id from the byte array
+            // id
             int id = BitConverter.ToInt32(message, offset);
 
             return (pos, id);

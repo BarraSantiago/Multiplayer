@@ -11,7 +11,6 @@ namespace Network
     public class Handshake : MonoBehaviour
     {
         public GameObject bodyPrefab;
-        public Material playerMaterial;
         private int _clientId = 0;
 
         private void AddClient(IPEndPoint ip)
@@ -40,7 +39,7 @@ namespace Network
             GameObject body = Instantiate(bodyPrefab, pos.ToVector3(), Quaternion.identity);
             
             Player player = body.AddComponent<Player>();
-
+            
             player.name = newName;
             player.gameObject.transform.name = newName;
             player.clientID = NetworkManager.Instance.IPToId[ip];
@@ -51,7 +50,7 @@ namespace Network
         {
             NetServerToClientHs netServerToClientHs = new NetServerToClientHs();
 
-            (int ID, string name)[] newPlayers = netServerToClientHs.Deserialize(data);
+            (int ID, string name, Vector3 pos)[] newPlayers = netServerToClientHs.Deserialize(data);
 
             Dictionary<int, Player> playersList = new Dictionary<int, Player>();
 
@@ -59,24 +58,21 @@ namespace Network
             {
                 if (NetworkManager.Instance.Players != null &&
                     NetworkManager.Instance.Players.Any(player => player.Value.clientID == newPlayers[i].ID)) continue;
-
-                Vector3 position;
-                position.x = 0;
-                position.y = 1 * i;
-                position.z = 0;
                 
                 if (newPlayers[i].name == NetworkManager.Instance.thisPlayer.name && NetworkManager.Instance.thisPlayer.clientID == -1)
                 {
                     
                     NetworkManager.Instance.thisPlayer.clientID = newPlayers[i].ID;
-                    NetworkManager.Instance.thisPlayer.gameObject.transform.position = position;
+                    NetworkManager.Instance.thisPlayer.gameObject.transform.position = newPlayers[i].pos;
                     
                     continue;
                 }
                 
+                if(newPlayers[i].ID == NetworkManager.Instance.thisPlayer.clientID) continue;
+                
                 GameObject body = Instantiate(bodyPrefab, Vector3.one * newPlayers[i].ID, Quaternion.identity);
                 
-                body.transform.position = position;
+                body.transform.position = newPlayers[i].pos;
                 
                 Player player = body.AddComponent<Player>();
                 

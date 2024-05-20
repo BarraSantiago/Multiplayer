@@ -16,7 +16,7 @@ namespace Game
         private void Awake()
         {
             NetworkManager.Instance.OnPlayerSpawned += InitializePlayer;
-            quit.onClick.AddListener(NetworkManager.Instance.Disconnect);
+            quit.onClick.AddListener(NetworkManager.Instance.CheckDisconnect);
         }
 
         private void InitializePlayer(GameObject obj)

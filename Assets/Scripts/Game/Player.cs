@@ -14,11 +14,11 @@ namespace Game
         public void ReduceHealth(int damage)
         {
             hp -= damage;
+
+            if (hp > 0) return;
             
-            if(hp <= 0)
-            {
-                NetworkManager.Instance.Disconnect();
-            }
+            NetworkManager.Instance.CheckDisconnect();
+            Destroy(this);
         }
     }
 }

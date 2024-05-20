@@ -26,7 +26,6 @@ namespace Game
 
         void OnTriggerEnter(Collider other)
         {
-            Debug.Log("collision trigger");
             if (other.gameObject.CompareTag("Player"))
             {
                 Player player = other.gameObject.GetComponent<Player>();
