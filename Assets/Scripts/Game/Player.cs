@@ -16,14 +16,12 @@ namespace Game
             hp -= damage;
 
             if (hp > 0) return;
-            
-            NetworkManager.Instance.CheckDisconnect();
-            Destroy(this);
-        }
 
-        private void OnDestroy()
-        {
-            
+            if (!NetworkManager.Instance.IsServer && NetworkManager.Instance.thisPlayer.clientID == clientID)
+            {
+                NetworkManager.Instance.Reject("You died.");
+            }
+            Destroy(gameObject);
         }
     }
 }

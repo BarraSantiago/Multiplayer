@@ -238,7 +238,7 @@ namespace Network
             return null;
         }
 
-        private void Reject(string reason)
+        public void Reject(string reason)
         {
             Connection.Close();
             Destroy(thisPlayer.gameObject);
@@ -310,8 +310,8 @@ namespace Network
             if (!IPToId.TryGetValue(ip, out var id)) return;
 
             Connection.Send(BitConverter.GetBytes((int)MessageType.Close), ip);
+            if(Players[IPToId[ip]] && Players[IPToId[ip]].gameObject) Destroy(Players[IPToId[ip]].gameObject);
             Clients.Remove(id);
-            Destroy(Players[IPToId[ip]].gameObject);
             Players.Remove(IPToId[ip]);
             IPToId.Remove(ip);
         }

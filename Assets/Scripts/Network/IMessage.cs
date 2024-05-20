@@ -318,4 +318,69 @@ public class NetVector3 : IMessage<(Vector3 pos, int id)>
             return outData.ToArray();
         }
     }
+    public class NetCountdownStarted : IMessage<int>
+    {
+        public int data;
+
+        public NetCountdownStarted(int timeRemaining)
+        {
+            data = timeRemaining;
+        }
+
+        public NetCountdownStarted(byte[] data)
+        {
+            this.data = Deserialize(data);
+        }
+
+        public int Deserialize(byte[] message)
+        {
+            return BitConverter.ToInt32(message, 4);
+        }
+
+        public MessageType GetMessageType()
+        {
+            return MessageType.CountdownStarted;
+        }
+
+        public byte[] Serialize()
+        {
+            List<byte> outData = new List<byte>();
+            outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+            outData.AddRange(BitConverter.GetBytes(data));
+            return outData.ToArray();
+        }
+    }
+
+    public class NetGameStarted : IMessage<int>
+    {
+        public int data;
+
+        public NetGameStarted(int timeRemaining)
+        {
+            data = timeRemaining;
+        }
+
+        public NetGameStarted(byte[] data)
+        {
+            this.data = Deserialize(data);
+        }
+
+        public int Deserialize(byte[] message)
+        {
+            return BitConverter.ToInt32(message, 4);
+        }
+
+        public MessageType GetMessageType()
+        {
+            return MessageType.GameStarted;
+        }
+
+        public byte[] Serialize()
+        {
+            List<byte> outData = new List<byte>();
+            outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+            outData.AddRange(BitConverter.GetBytes(data));
+            return outData.ToArray();
+        }
+    }
 }

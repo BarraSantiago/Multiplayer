@@ -456,7 +456,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 469f1a9b4f41d0a4d96c6aa2ceeaa38b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  NameUsedText: {fileID: 1977730041}
+  RejectedMessage: {fileID: 1977730041}
   connectBtn: {fileID: 396509903}
   startServerBtn: {fileID: 306608487}
   portInputField: {fileID: 1558557928}
@@ -1265,7 +1265,7 @@ MonoBehaviour:
     type: 3}
   resume: {fileID: 1789537406}
   quit: {fileID: 1898328527}
-  gameTimer: 5
+  gameTimer: 30
 --- !u!4 &653412865
 Transform:
   m_ObjectHideFlags: 0

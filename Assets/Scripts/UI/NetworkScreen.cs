@@ -21,7 +21,7 @@ namespace UI
         {
             connectBtn.onClick.AddListener(OnConnectBtnClick);
             startServerBtn.onClick.AddListener(OnStartServerBtnClick);
-            NetworkManager.Instance.OnRejected += OnNameInUse;
+            NetworkManager.Instance.OnRejected += OnRejected;
         }
 
         private void OnConnectBtnClick()
@@ -49,7 +49,7 @@ namespace UI
             this.gameObject.SetActive(false);
         }
 
-        private void OnNameInUse(String message)
+        private void OnRejected(String message)
         {
             RejectedMessage.gameObject.SetActive(true);
             RejectedMessage.text = message;
@@ -59,7 +59,7 @@ namespace UI
 
         private void OnDestroy()
         {
-            NetworkManager.Instance.OnRejected -= OnNameInUse;
+            NetworkManager.Instance.OnRejected -= OnRejected;
         }
     }
 }
