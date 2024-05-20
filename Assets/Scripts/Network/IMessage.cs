@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using UnityEngine;
 
@@ -16,8 +14,17 @@ namespace Network
         Ping,
         Pong,
         Close,
-        Dispose,
-        Shoot
+        Shoot,
+        Rejected,
+        CountdownStarted,
+        GameStarted
+    }
+    
+    public enum ErrorType
+    {
+        None,
+        NameInUse,
+        ServerFull
     }
 
 
@@ -123,7 +130,34 @@ public class NetServerToClientHs : IMessage<(int ID, string name, Vector3 pos)[]
 
         return outData.ToArray();
     }
-}    public class NetVector3 : IMessage<(Vector3 pos, int id)>
+}
+
+public class NetRejectClient : IMessage<int>
+{
+    public int data;
+
+    public MessageType GetMessageType()
+    {
+        return MessageType.Rejected;
+    }
+
+    public int Deserialize(byte[] message)
+    {
+        byte[] messageWithoutHeader = new byte[message.Length - 4];
+        Array.Copy(message, 4, messageWithoutHeader, 0, message.Length - 4);
+        return BitConverter.ToInt32(messageWithoutHeader);
+    }
+
+    public byte[] Serialize()
+    {
+        List<byte> outData = new List<byte>();
+        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+        outData.AddRange(BitConverter.GetBytes(data));
+        return outData.ToArray();
+    }
+}
+
+public class NetVector3 : IMessage<(Vector3 pos, int id)>
     {
         private static ulong lastMsgID = 0;
         public (Vector3 pos, int id) data;

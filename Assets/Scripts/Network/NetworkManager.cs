@@ -28,6 +28,7 @@ namespace Network
         [SerializeField] private GameObject bulletPrefab;
         [SerializeField] private GameObject bodyPrefab;
         [SerializeField] private Material playerMaterial;
+        [SerializeField] public double countdownSeconds = 10;
 
         public readonly Dictionary<IPEndPoint, int> IPToId = new Dictionary<IPEndPoint, int>();
         public readonly Dictionary<int, Client> Clients = new Dictionary<int, Client>();
@@ -37,15 +38,22 @@ namespace Network
         public IPAddress IPAddress { get; private set; }
         public int Port { get; private set; }
         public bool IsServer { get; private set; }
+        public int MaxPlayers { get; set; } = 4;
+
         public int timeOut = 10;
 
         public Action<byte[], IPEndPoint> OnReceiveEvent;
         public Action<GameObject> OnPlayerSpawned;
+        public Action<string> OnRejected;
+        public Action OnGameStart;
+        public Action OnCountdownStart;
 
-
+        private bool countdownStarted = false;
+        private bool gameStarted = false;
+        private DateTime countdownStartTime;
         private Handshake _handshake;
         private DateTime _time;
-        private UdpConnection _connection;
+        public UdpConnection Connection;
 
         private void Start()
         {
@@ -57,7 +65,7 @@ namespace Network
         {
             IsServer = true;
             this.Port = port;
-            _connection = new UdpConnection(port, this);
+            Connection = new UdpConnection(port, this);
         }
 
         public void StartClient(IPAddress ip, int port, string name)
@@ -74,7 +82,7 @@ namespace Network
             OnPlayerSpawned?.Invoke(body);
 
 
-            _connection = new UdpConnection(ip, port, this);
+            Connection = new UdpConnection(ip, port, this);
             _time = DateTime.UtcNow;
 
             SendToServer(_handshake.PrepareHandshake(name));
@@ -83,10 +91,17 @@ namespace Network
 
         private void Update()
         {
-            // Flush the data in main thread
-            _connection?.FlushReceiveData();
+            Connection?.FlushReceiveData();
 
             CheckPings();
+
+            if(gameStarted) return;
+            
+            if (!countdownStarted ||
+                !((DateTime.UtcNow - countdownStartTime).TotalMinutes >= (countdownSeconds / 60))) return;
+            gameStarted = true;
+            Broadcast(BitConverter.GetBytes((int)MessageType.GameStarted));
+            OnGameStart?.Invoke();
         }
 
         private void OnDestroy()
@@ -96,7 +111,7 @@ namespace Network
 
         public void SendToServer(byte[] data)
         {
-            _connection.Send(data);
+            Connection.Send(data);
         }
 
         public void Broadcast(byte[] data)
@@ -105,7 +120,7 @@ namespace Network
 
             while (iterator.MoveNext())
             {
-                _connection.Send(data, iterator.Current.Value.ipEndPoint);
+                Connection.Send(data, iterator.Current.Value.ipEndPoint);
             }
         }
 
@@ -127,21 +142,10 @@ namespace Network
 
         public void OnReceiveData(byte[] dataWithChecksum, IPEndPoint ip)
         {
-            byte[] data = new byte[dataWithChecksum.Length - sizeof(int)];
-            byte[] checksumBytes = new byte[sizeof(int)];
-
-            Buffer.BlockCopy(dataWithChecksum, 0, data, 0, data.Length);
-            Buffer.BlockCopy(dataWithChecksum, data.Length, checksumBytes, 0, sizeof(int));
-
-            int receivedChecksum = BitConverter.ToInt32(checksumBytes, 0);
-            int calculatedChecksum = CalculateChecksum(data);
-
-            if (receivedChecksum != calculatedChecksum)
-            {
-                Debug.LogError("Data is corrupted");
-                return;
-            }
-
+            byte[] data = CheckCorrupted(dataWithChecksum);
+            
+            if(data == null) return;
+            
             MessageType messageType = CheckMessageType(data);
 
             switch (messageType)
@@ -178,16 +182,67 @@ namespace Network
 
                     break;
 
-                case MessageType.Dispose:
-                    break;
-
                 case MessageType.Shoot:
                     HandleBullets(data);
                     break;
 
+                case MessageType.Rejected:
+                    HandleRejected(data);
+                    break;
+
+                case MessageType.CountdownStarted:
+                    OnCountdownStart?.Invoke();
+                    break;
+                case MessageType.GameStarted:
+                    OnGameStart?.Invoke();
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException();
             }
+        }
+
+        private void HandleRejected(byte[] data)
+        {
+            NetRejectClient netRejectClient = new NetRejectClient();
+            ErrorType errorType = (ErrorType)netRejectClient.Deserialize(data);
+
+            switch (errorType)
+            {
+                case ErrorType.None:
+                    break;
+                case ErrorType.NameInUse:
+                    Reject("Name is already in use. Please choose a new one.");
+                    break;
+                case ErrorType.ServerFull:
+                    Reject("Server is full.");
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
+
+        private byte[] CheckCorrupted(byte[] dataWithChecksum)
+        {
+            byte[] data = new byte[dataWithChecksum.Length - sizeof(int)];
+            byte[] checksumBytes = new byte[sizeof(int)];
+
+            Buffer.BlockCopy(dataWithChecksum, 0, data, 0, data.Length);
+            Buffer.BlockCopy(dataWithChecksum, data.Length, checksumBytes, 0, sizeof(int));
+
+            int receivedChecksum = BitConverter.ToInt32(checksumBytes, 0);
+            int calculatedChecksum = CalculateChecksum(data);
+
+            if (receivedChecksum == calculatedChecksum) return data;
+            
+            Debug.LogError("Data is corrupted");
+            return null;
+        }
+
+        private void Reject(string reason)
+        {
+            Connection.Close();
+            Destroy(thisPlayer.gameObject);
+            OnRejected?.Invoke(reason);
         }
 
         private void HandleBullets(byte[] data)
@@ -220,8 +275,10 @@ namespace Network
 
                 Player player = _handshake.ServerRecieveHandshake(data, ip);
 
+                if(!player) return;
+                
                 Players.Add(IPToId[ip], player);
-
+                
                 (int ID, string name, Vector3 pos)[] players = new (int ID, string name, Vector3 pos)[Players.Count];
 
                 int i = 0;
@@ -233,6 +290,13 @@ namespace Network
                 netServerToClientHs.data = players;
 
                 Broadcast(netServerToClientHs.Serialize());
+                
+                if(Players.Count < 2 || countdownStarted) return;
+                
+                countdownStarted = true;
+                OnCountdownStart?.Invoke();
+                countdownStartTime = DateTime.UtcNow;
+                Broadcast(BitConverter.GetBytes((int)MessageType.CountdownStarted));
             }
             else
             {
@@ -245,7 +309,7 @@ namespace Network
         {
             if (!IPToId.TryGetValue(ip, out var id)) return;
 
-            _connection.Send(BitConverter.GetBytes((int)MessageType.Close), ip);
+            Connection.Send(BitConverter.GetBytes((int)MessageType.Close), ip);
             Clients.Remove(id);
             Destroy(Players[IPToId[ip]].gameObject);
             Players.Remove(IPToId[ip]);
@@ -272,21 +336,7 @@ namespace Network
 
             Clients[IPToId[ip]] = client;
 
-            _connection.Send(BitConverter.GetBytes((int)MessageType.Ping), ip);
-        }
-
-        public void UpdatePositions()
-        {
-            if (!IsServer) return;
-
-            if (!IsServer) return;
-            foreach (var netVector3 in Clients.Values.Select(client => Players.TryGetValue(client.id, out var player) ? new NetVector3(player.gameObject.transform.position, client.id) : null))
-            {
-                if (netVector3 != null)
-                {
-                    Broadcast(netVector3.Serialize());
-                }
-            }
+            Connection.Send(BitConverter.GetBytes((int)MessageType.Ping), ip);
         }
 
         private void MovePlayers(byte[] data, IPEndPoint ip)
@@ -326,7 +376,7 @@ namespace Network
 
         private void CheckPings()
         {
-            if (_connection == null) return;
+            if (Connection == null) return;
 
             if (IsServer)
             {
@@ -370,7 +420,21 @@ namespace Network
 
         public void Disconnect()
         {
-            _connection.Close();
+            Connection.Close();
+#if UNITY_EDITOR
+            EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+        }
+
+        public void EndGame()
+        {
+            foreach (var client in Clients.Values)
+            {
+                RemoveClient(client.ipEndPoint);
+            }
+            
 #if UNITY_EDITOR
             EditorApplication.isPlaying = false;
 #else

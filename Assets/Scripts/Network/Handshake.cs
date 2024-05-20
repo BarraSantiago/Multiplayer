@@ -28,18 +28,34 @@ namespace Network
 
         public Player ServerRecieveHandshake(byte[] data, IPEndPoint ip)
         {
+            if (NetworkManager.Instance.Players.Count >= NetworkManager.Instance.MaxPlayers)
+            {
+               
+                    // Name is already used, reject the connection
+                    NetRejectClient rejectClientMessage = new NetRejectClient { data = (int)ErrorType.ServerFull };
+                    NetworkManager.Instance.Connection.Send(rejectClientMessage.Serialize(), ip);
+                    return null;
+                
+            }
+            NetClientToServerHs netClientToServerHs = new NetClientToServerHs();
+            string newName = netClientToServerHs.Deserialize(data);
+
+            if (NetworkManager.Instance.Players.Values.Any(player => player.name == newName))
+            {
+                // Name is already used, reject the connection
+                NetRejectClient rejectClientMessage = new NetRejectClient { data = (int)ErrorType.NameInUse };
+                NetworkManager.Instance.Connection.Send(rejectClientMessage.Serialize(), ip);
+                return null;
+            }
+            
             AddClient(ip);
 
-            NetClientToServerHs netClientToServerHs = new NetClientToServerHs();
-
-            string newName = netClientToServerHs.Deserialize(data);
-            
             Vec3 pos = Vec3.FromVector3(Vector3.up * NetworkManager.Instance.IPToId[ip]);
 
             GameObject body = Instantiate(bodyPrefab, pos.ToVector3(), Quaternion.identity);
-            
+
             Player player = body.AddComponent<Player>();
-            
+
             player.name = newName;
             player.gameObject.transform.name = newName;
             player.clientID = NetworkManager.Instance.IPToId[ip];

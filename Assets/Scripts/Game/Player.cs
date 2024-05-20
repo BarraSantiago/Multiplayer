@@ -20,5 +20,10 @@ namespace Game
             NetworkManager.Instance.CheckDisconnect();
             Destroy(this);
         }
+
+        private void OnDestroy()
+        {
+            
+        }
     }
 }
