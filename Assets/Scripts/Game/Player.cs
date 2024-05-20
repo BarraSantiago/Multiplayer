@@ -1,20 +1,15 @@
 ﻿using System;
 using Network;
 using UnityEngine;
-using Utils;
 
 namespace Game
 {
     [Serializable]
-    public class Player
+    public class Player : MonoBehaviour
     {
-        public int clientID;
+        public int clientID = -1;
         public string name;
-        public int hp;
-        public Vec3 position;
-        public bool hasBody;
-        public GameObject body;
-        
+        public int hp = 3;
         
         public void ReduceHealth(int damage)
         {

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using Game;
 using UnityEditor;
@@ -22,7 +23,6 @@ namespace Network
         }
     }
 
-
     public class NetworkManager : MonoBehaviourSingleton<NetworkManager>, IReceiveData
     {
         [SerializeField] private GameObject bulletPrefab;
@@ -38,15 +38,18 @@ namespace Network
         public int Port { get; private set; }
         public bool IsServer { get; private set; }
         public int timeOut = 10;
+        
         public Action<byte[], IPEndPoint> OnReceiveEvent;
+        public Action<GameObject> OnPlayerSpawned;
 
 
-        private Handshake _handshake = new Handshake();
+        private Handshake _handshake;
         private DateTime _time;
         private UdpConnection _connection;
 
         private void Start()
         {
+            _handshake = gameObject.AddComponent<Handshake>();
             _handshake.bodyPrefab = bodyPrefab;
             _handshake.playerMaterial = playerMaterial;
         }
@@ -64,7 +67,14 @@ namespace Network
 
             this.Port = port;
             this.IPAddress = ip;
+            
+            GameObject body = Instantiate(bodyPrefab);
+            body.GetComponent<MeshRenderer>().material = playerMaterial;
+            thisPlayer = body.AddComponent<Player>();
             thisPlayer.name = name;
+            OnPlayerSpawned?.Invoke(body);
+            
+            
             _connection = new UdpConnection(ip, port, this);
             _time = DateTime.UtcNow;
         
@@ -75,10 +85,14 @@ namespace Network
         private void Update()
         {
             // Flush the data in main thread
-            if (_connection != null)
-                _connection.FlushReceiveData();
+            _connection?.FlushReceiveData();
 
             CheckPings();
+        }
+
+        private void OnDestroy()
+        {
+            Disconnect();
         }
 
         public void SendToServer(byte[] data)
@@ -100,9 +114,34 @@ namespace Network
         {
             return (MessageType)BitConverter.ToInt32(data);
         }
-
-        public void OnReceiveData(byte[] data, IPEndPoint ip)
+        
+        public int CalculateChecksum(byte[] data)
         {
+            int checksum = 0;
+            foreach (byte b in data)
+            {
+                checksum += b;
+            }
+            return checksum;
+        }
+
+        public void OnReceiveData(byte[] dataWithChecksum, IPEndPoint ip)
+        {
+            byte[] data = new byte[dataWithChecksum.Length - sizeof(int)];
+            byte[] checksumBytes = new byte[sizeof(int)];
+
+            Buffer.BlockCopy(dataWithChecksum, 0, data, 0, data.Length);
+            Buffer.BlockCopy(dataWithChecksum, data.Length, checksumBytes, 0, sizeof(int));
+
+            int receivedChecksum = BitConverter.ToInt32(checksumBytes, 0);
+            int calculatedChecksum = CalculateChecksum(data);
+
+            if (receivedChecksum != calculatedChecksum)
+            {
+                Debug.LogError("Data is corrupted");
+                return;
+            }
+            
             MessageType messageType = CheckMessageType(data);
 
             switch (messageType)
@@ -158,7 +197,7 @@ namespace Network
             {
                 if(newData.id == thisPlayer.clientID) return;
             
-                Bullet bullet = Instantiate(bulletPrefab, newData.pos, Quaternion.identity).GetComponent<Bullet>();
+                Bullet bullet = Instantiate(bulletPrefab, newData.pos, Quaternion.identity).AddComponent<Bullet>();
                 bullet.SetTarget(newData.target);
                 bullet.clientID = newData.id;
             }
@@ -176,9 +215,10 @@ namespace Network
 
                 (int ID, string name)[] players = new (int ID, string name)[Players.Count];
 
+                int i = 0;
                 foreach (var value in Players)
                 {
-                    players[value.Key] = (value.Key, value.Value.name);
+                    players[i++] = (value.Key, value.Value.name);
                 }
 
                 netServerToClientHs.data = players;
@@ -197,40 +237,33 @@ namespace Network
             if (!IPToId.TryGetValue(ip, out var id)) return;
 
             Clients.Remove(id);
-            Destroy(Players[IPToId[ip]].body);
+            Destroy(Players[IPToId[ip]].gameObject);
             Players.Remove(IPToId[ip]);
+            IPToId.Remove(ip);
         }
 
-        /// <summary>
-        /// Client updates time and sends ping
-        /// </summary>
         private void SendPing()
         {
+            TimeSpan newDateTime = DateTime.UtcNow - _time;
+            MS = (float)newDateTime.Milliseconds;
+            
             _time = DateTime.UtcNow;
 
             SendToServer(BitConverter.GetBytes((int)MessageType.Pong));
 
-            MS = DateTime.UtcNow.Ticks - MS;
         }
 
-        /// <summary>
-        /// Server updates player time and sends pong
-        /// </summary>
-        /// <param name="ip"> Client to send pong to </param>
         private void SendPong(IPEndPoint ip)
         {
-            var client = Clients[IPToId[ip]];
-
+            if(!IPToId.TryGetValue(ip, out var value)) return;
+            
+            var client = Clients[value];
+            
             client.timeStamp = DateTime.UtcNow;
 
             Clients[IPToId[ip]] = client;
 
             _connection.Send(BitConverter.GetBytes((int)MessageType.Ping), ip);
-
-            long ticks = DateTime.UtcNow.Ticks - (long)MS;
-
-            // Convert ticks to milliseconds
-            MS = Math.Round(TimeSpan.FromTicks(ticks).TotalMilliseconds, 2);
         }
 
         private void MovePlayers(byte[] data, IPEndPoint ip)
@@ -241,8 +274,10 @@ namespace Network
 
             if (IsServer)
             {
-                Player player = Players[IPToId[ip]];
-                player.body.transform.position = newData.pos;
+                if(!IPToId.TryGetValue(ip, out var value)) return;
+                
+                Player player = Players[value];
+                player.gameObject.transform.position = newData.pos;
                 Players[IPToId[ip]] = player;
                 Broadcast(data);
             }
@@ -250,7 +285,7 @@ namespace Network
             {
                 if (newData.id == thisPlayer.clientID) return;
 
-                Players[newData.id].body.transform.position = newData.pos;
+                Players[newData.id].gameObject.transform.position = newData.pos;
             }
         }
 
@@ -274,11 +309,12 @@ namespace Network
             {
                 bool clientRemoved = false;
                 List<IPEndPoint> clientsToRemove = new List<IPEndPoint>();
+                
                 foreach (var client in Clients.Values)
                 {
                     DateTime timeOutTime = client.timeStamp;
 
-                    if (timeOutTime.AddSeconds(timeOut) > DateTime.UtcNow) continue;
+                    if (timeOutTime.AddSeconds(timeOut) > DateTime.UtcNow && Players[client.id].hp > 0) continue;
 
                     clientsToRemove.Add(client.ipEndPoint);
                     clientRemoved = true;

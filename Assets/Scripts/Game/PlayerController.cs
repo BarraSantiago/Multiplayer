@@ -37,7 +37,7 @@ namespace Game
         public void OnFire(InputValue context)
         {
             // Instantiate the bullet
-            GameObject bullet = Instantiate(bulletPrefab);
+            GameObject bulletBody = Instantiate(bulletPrefab);
 
             Vector3 screenPosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y, -Camera.main.transform.position.z);
             Vector3 mousePosition = Camera.main.ScreenToWorldPoint(screenPosition);
@@ -45,9 +45,11 @@ namespace Game
 
             direction.z = 0;
             
-            bullet.transform.position = transform.position + direction;
+            bulletBody.transform.position = transform.position + direction;
 
-            bullet.AddComponent<Bullet>().SetTarget(direction);
+            Bullet bullet = bulletBody.AddComponent<Bullet>();
+            bullet.clientID = NetworkManager.Instance.thisPlayer.clientID;
+            bullet.SetTarget(direction);
             NetworkManager.Instance.FireBullet( Vec3.FromVector3(bullet.transform.position), Vec3.FromVector3(direction));
         }
 

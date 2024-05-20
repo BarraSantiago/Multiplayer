@@ -8,10 +8,9 @@ public class MonoBehaviourSingleton<T> : MonoBehaviour where T : MonoBehaviourSi
 
     public static T Instance
     {
-        get 
+        get
         {
-            if (instance == null)
-                instance = FindObjectOfType<MonoBehaviourSingleton<T>>();
+            instance ??= FindObjectOfType<MonoBehaviourSingleton<T>>();
 
             return (T)instance;
         }

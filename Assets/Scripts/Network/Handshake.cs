@@ -10,7 +10,6 @@ namespace Network
 {
     public class Handshake : MonoBehaviour
     {
-        public static Action<GameObject> onPlayerSpawned;
         public GameObject bodyPrefab;
         public Material playerMaterial;
         private int _clientId = 0;
@@ -37,18 +36,14 @@ namespace Network
             string newName = netClientToServerHs.Deserialize(data);
             
             Vec3 pos = Vec3.FromVector3(Vector3.up * NetworkManager.Instance.IPToId[ip]);
-            
-            Player player = new Player
-            {
-                name = newName,
-                clientID = NetworkManager.Instance.IPToId[ip],
-                hp = 3,
-                position = pos,
-                body = Instantiate(bodyPrefab, pos.ToVector3(), Quaternion.identity),
-                hasBody = true
-            };
 
-            player.body.transform.name = player.clientID.ToString();
+            GameObject body = Instantiate(bodyPrefab, pos.ToVector3(), Quaternion.identity);
+            
+            Player player = body.AddComponent<Player>();
+
+            player.name = newName;
+            player.gameObject.transform.name = newName;
+            player.clientID = NetworkManager.Instance.IPToId[ip];
             return player;
         }
 
@@ -65,35 +60,31 @@ namespace Network
                 if (NetworkManager.Instance.Players != null &&
                     NetworkManager.Instance.Players.Any(player => player.Value.clientID == newPlayers[i].ID)) continue;
 
-                GameObject body = Instantiate(bodyPrefab, Vector3.one * newPlayers[i].ID, Quaternion.identity);
                 Vector3 position;
                 position.x = 0;
                 position.y = 1 * i;
                 position.z = 0;
-                body.transform.position = position;
-
-                if (newPlayers[i].ID != NetworkManager.Instance.thisPlayer.clientID)
+                
+                if (newPlayers[i].name == NetworkManager.Instance.thisPlayer.name && NetworkManager.Instance.thisPlayer.clientID == -1)
                 {
-                    playersList.Add(newPlayers[i].ID, new Player
-                    {
-                        clientID = newPlayers[i].ID,
-                        name = newPlayers[i].name,
-                        hp = 3,
-                        position = Vec3.FromVector3(Vector3.one * newPlayers[i].ID),
-                        body = body,
-                        hasBody = true
-                    });
+                    
+                    NetworkManager.Instance.thisPlayer.clientID = newPlayers[i].ID;
+                    NetworkManager.Instance.thisPlayer.gameObject.transform.position = position;
+                    
+                    continue;
                 }
+                
+                GameObject body = Instantiate(bodyPrefab, Vector3.one * newPlayers[i].ID, Quaternion.identity);
+                
+                body.transform.position = position;
+                
+                Player player = body.AddComponent<Player>();
+                
+                player.name = newPlayers[i].name;
+                player.clientID = newPlayers[i].ID;
+                player.gameObject.transform.name = newPlayers[i].name;
 
-                if (NetworkManager.Instance.thisPlayer.hasBody) Destroy(body);
-                
-                if (newPlayers[i].name != NetworkManager.Instance.thisPlayer.name &&
-                    !NetworkManager.Instance.thisPlayer.hasBody) continue;
-                
-                body.GetComponent<MeshRenderer>().material = playerMaterial;
-                onPlayerSpawned?.Invoke(body);
-                NetworkManager.Instance.thisPlayer.clientID = newPlayers[i].ID;
-                NetworkManager.Instance.thisPlayer.hasBody = true;
+                playersList.Add(newPlayers[i].ID, player);
             }
 
             return playersList;
@@ -104,7 +95,7 @@ namespace Network
             NetClientToServerHs netClientToServerHs = new NetClientToServerHs();
 
             netClientToServerHs.data = _name;
-            NetworkManager.Instance.thisPlayer.name = _name;
+            if(!NetworkManager.Instance.IsServer) NetworkManager.Instance.thisPlayer.name = _name;
 
             return netClientToServerHs.Serialize();
         }

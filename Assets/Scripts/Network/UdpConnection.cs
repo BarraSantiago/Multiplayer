@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
+using Network;
 
 public class UdpConnection
 {
@@ -48,13 +49,12 @@ public class UdpConnection
             while (dataReceivedQueue.Count > 0)
             {
                 DataReceived dataReceived = dataReceivedQueue.Dequeue();
-                if (receiver != null)
-                    receiver.OnReceiveData(dataReceived.data, dataReceived.ipEndPoint);
+                receiver?.OnReceiveData(dataReceived.data, dataReceived.ipEndPoint);
             }
         }
     }
 
-    void OnReceive(IAsyncResult ar)
+    private void OnReceive(IAsyncResult ar)
     {
         try
         {
@@ -77,11 +77,25 @@ public class UdpConnection
 
     public void Send(byte[] data)
     {
-        connection.Send(data, data.Length);
-    }
+        int checksum = NetworkManager.Instance.CalculateChecksum(data);
+        byte[] checksumBytes = BitConverter.GetBytes(checksum);
 
+        byte[] dataWithChecksum = new byte[data.Length + checksumBytes.Length];
+        Buffer.BlockCopy(data, 0, dataWithChecksum, 0, data.Length);
+        Buffer.BlockCopy(checksumBytes, 0, dataWithChecksum, data.Length, checksumBytes.Length);
+        
+        connection.Send(dataWithChecksum, dataWithChecksum.Length);
+    }
+    
     public void Send(byte[] data, IPEndPoint ipEndpoint)
     {
-        connection.Send(data, data.Length, ipEndpoint);
+        int checksum = NetworkManager.Instance.CalculateChecksum(data);
+        byte[] checksumBytes = BitConverter.GetBytes(checksum);
+
+        byte[] dataWithChecksum = new byte[data.Length + checksumBytes.Length];
+        Buffer.BlockCopy(data, 0, dataWithChecksum, 0, data.Length);
+        Buffer.BlockCopy(checksumBytes, 0, dataWithChecksum, data.Length, checksumBytes.Length);
+
+        connection.Send(dataWithChecksum, dataWithChecksum.Length, ipEndpoint);
     }
 }

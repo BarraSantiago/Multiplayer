@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 
 namespace Game
 {
@@ -25,9 +26,9 @@ namespace Game
 
         void OnTriggerEnter(Collider other)
         {
+            Debug.Log("collision trigger");
             if (other.gameObject.CompareTag("Player"))
             {
-                // Reduce the player's HP
                 Player player = other.gameObject.GetComponent<Player>();
 
                 if (player.clientID == clientID) return;

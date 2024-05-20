@@ -15,7 +15,7 @@ namespace Game
 
         private void Awake()
         {
-            Handshake.onPlayerSpawned += InitializePlayer;
+            NetworkManager.Instance.OnPlayerSpawned += InitializePlayer;
             quit.onClick.AddListener(NetworkManager.Instance.Disconnect);
         }
 
@@ -33,7 +33,7 @@ namespace Game
 
             input.actions.Enable();
             
-            Handshake.onPlayerSpawned -= InitializePlayer;
+            NetworkManager.Instance.OnPlayerSpawned -= InitializePlayer;
         }
     }
 }
