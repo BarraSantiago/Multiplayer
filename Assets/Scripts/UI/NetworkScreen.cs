@@ -22,6 +22,16 @@ namespace UI
             connectBtn.onClick.AddListener(OnConnectBtnClick);
             startServerBtn.onClick.AddListener(OnStartServerBtnClick);
             NetworkManager.Instance.OnRejected += OnRejected;
+            NetworkManager.Instance.OnWinner += OnWinner;
+        }
+
+        private void OnWinner(string winner)
+        {
+            RejectedMessage.gameObject.SetActive(true);
+            RejectedMessage.text = winner;
+            ChatScreen.Instance.gameObject.SetActive(false);
+            this.gameObject.SetActive(true);
+            
         }
 
         private void OnConnectBtnClick()
@@ -40,7 +50,7 @@ namespace UI
             int port = System.Convert.ToInt32(portInputField.text);
 
             NetworkManager.Instance.StartServer(port);
-            SwitchScreens();
+            gameObject.SetActive(false);
         }
 
         private void SwitchScreens()

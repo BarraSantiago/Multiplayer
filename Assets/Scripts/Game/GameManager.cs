@@ -3,13 +3,14 @@ using Network;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace Game
 {
     public class GameManager : MonoBehaviour
     {
-        [SerializeField] private TMP_Text text;
+        [FormerlySerializedAs("text")] [SerializeField] private TMP_Text countdown;
         [SerializeField] private InputActionAsset inputMap;
         [SerializeField] private GameObject configMenu;
         [SerializeField] private GameObject bulletPrefab;
@@ -23,16 +24,22 @@ namespace Game
         private void Awake()
         {
             NetworkManager.Instance.OnPlayerSpawned += InitializePlayer;
-            NetworkManager.Instance.OnRejected += NameInUse;
+            NetworkManager.Instance.OnRejected += OnRejected;
             quit.onClick.AddListener(NetworkManager.Instance.CheckDisconnect);
             resume.onClick.AddListener(NetworkManager.Instance.CheckDisconnect);
             NetworkManager.Instance.OnGameStart += OnGameStarted;
             NetworkManager.Instance.OnCountdownStart += OnCountdownStarted;
+            NetworkManager.Instance.OnWinner += OnWinner;
+        }
+
+        private void OnWinner(string obj)
+        {
+            countdown.gameObject.SetActive(false);
         }
 
         private void OnCountdownStarted()
         {
-            text.gameObject.SetActive(true);
+            countdown.gameObject.SetActive(true);
             timer = NetworkManager.Instance.countdownSeconds;
             StartCoroutine(Countdown());
         }
@@ -41,7 +48,7 @@ namespace Game
         {
             while (timer > 0)
             {
-                text.text = "Countdown to start: " + timer;
+                countdown.text = "Countdown to start: " + timer;
 
                 yield return new WaitForSeconds(1f);
 
@@ -50,7 +57,7 @@ namespace Game
         }
 
 
-        private void NameInUse(string message)
+        private void OnRejected(string message)
         {
             NetworkManager.Instance.OnPlayerSpawned += InitializePlayer;
         }
@@ -85,7 +92,7 @@ namespace Game
         {
             while (gameTimer > 0)
             {
-                text.text = "Remaining time: " + gameTimer;
+                countdown.text = "Remaining time: " + gameTimer;
 
                 yield return new WaitForSeconds(1f);
 

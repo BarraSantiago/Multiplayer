@@ -28,6 +28,7 @@ namespace Network
 
         public Player ServerRecieveHandshake(byte[] data, IPEndPoint ip)
         {
+            if (ip == null || data == null) return null;
             if (NetworkManager.Instance.Players.Count >= NetworkManager.Instance.MaxPlayers)
             {
                
@@ -40,7 +41,7 @@ namespace Network
             NetClientToServerHs netClientToServerHs = new NetClientToServerHs();
             string newName = netClientToServerHs.Deserialize(data);
 
-            if (NetworkManager.Instance.Players.Values.Any(player => player.name == newName))
+            if (NetworkManager.Instance.Players.Values.Any(player => player.name == newName) || newName == "")
             {
                 // Name is already used, reject the connection
                 NetRejectClient rejectClientMessage = new NetRejectClient { data = (int)ErrorType.NameInUse };

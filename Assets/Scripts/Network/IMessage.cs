@@ -17,9 +17,10 @@ namespace Network
         Shoot,
         Rejected,
         CountdownStarted,
-        GameStarted
+        GameStarted,
+        Winner
     }
-    
+
     public enum ErrorType
     {
         None,
@@ -64,100 +65,130 @@ namespace Network
             return outData.ToArray();
         }
     }
-
-public class NetServerToClientHs : IMessage<(int ID, string name, Vector3 pos)[]>
-{
-    public (int ID, string name, Vector3 pos)[] data;
-
-    public (int ID, string name, Vector3 pos)[] Deserialize(byte[] message)
+    
+    public class NetWinner : IMessage<string>
     {
-        int offset = 4; // Skip the message type
-        int count = BitConverter.ToInt32(message, offset);
-        offset += sizeof(int);
+        public string data;
 
-        var result = new (int ID, string name, Vector3 pos)[count];
-
-        for (int i = 0; i < count; i++)
+        public string Deserialize(byte[] message)
         {
-            int id = BitConverter.ToInt32(message, offset);
-            offset += sizeof(int);
+            string outData;
 
-            int nameLength = BitConverter.ToInt32(message, offset);
-            offset += sizeof(int);
+            outData = Encoding.UTF8.GetString(message, 4, message.Length - 4);
 
-            string name = Encoding.UTF8.GetString(message, offset, nameLength);
-            offset += nameLength;
-
-            float x = BitConverter.ToSingle(message, offset);
-            offset += sizeof(float);
-
-            float y = BitConverter.ToSingle(message, offset);
-            offset += sizeof(float);
-
-            float z = BitConverter.ToSingle(message, offset);
-            offset += sizeof(float);
-
-            result[i] = (id, name, new Vector3(x, y, z));
+            return outData;
         }
 
-        return result;
-    }
-
-    public MessageType GetMessageType()
-    {
-        return MessageType.HandShake;
-    }
-
-    public byte[] Serialize()
-    {
-        List<byte> outData = new List<byte>();
-
-        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
-        outData.AddRange(BitConverter.GetBytes(data.Length));
-
-        foreach (var item in data)
+        public MessageType GetMessageType()
         {
-            outData.AddRange(BitConverter.GetBytes(item.ID));
-
-            byte[] nameBytes = Encoding.UTF8.GetBytes(item.name);
-            outData.AddRange(BitConverter.GetBytes(nameBytes.Length));
-            outData.AddRange(nameBytes);
-
-            outData.AddRange(BitConverter.GetBytes(item.pos.x));
-            outData.AddRange(BitConverter.GetBytes(item.pos.y));
-            outData.AddRange(BitConverter.GetBytes(item.pos.z));
+            return MessageType.Winner;
         }
 
-        return outData.ToArray();
+        public byte[] Serialize()
+        {
+            List<byte> outData = new List<byte>();
+
+            outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+
+            outData.AddRange(data.Select(letter => (byte)letter));
+
+            return outData.ToArray();
+        }
     }
-}
 
-public class NetRejectClient : IMessage<int>
-{
-    public int data;
-
-    public MessageType GetMessageType()
+    public class NetServerToClientHs : IMessage<(int ID, string name, Vector3 pos)[]>
     {
-        return MessageType.Rejected;
+        public (int ID, string name, Vector3 pos)[] data;
+
+        public (int ID, string name, Vector3 pos)[] Deserialize(byte[] message)
+        {
+            int offset = 4; // Skip the message type
+            int count = BitConverter.ToInt32(message, offset);
+            offset += sizeof(int);
+
+            var result = new (int ID, string name, Vector3 pos)[count];
+
+            for (int i = 0; i < count; i++)
+            {
+                int id = BitConverter.ToInt32(message, offset);
+                offset += sizeof(int);
+
+                int nameLength = BitConverter.ToInt32(message, offset);
+                offset += sizeof(int);
+
+                string name = Encoding.UTF8.GetString(message, offset, nameLength);
+                offset += nameLength;
+
+                float x = BitConverter.ToSingle(message, offset);
+                offset += sizeof(float);
+
+                float y = BitConverter.ToSingle(message, offset);
+                offset += sizeof(float);
+
+                float z = BitConverter.ToSingle(message, offset);
+                offset += sizeof(float);
+
+                result[i] = (id, name, new Vector3(x, y, z));
+            }
+
+            return result;
+        }
+
+        public MessageType GetMessageType()
+        {
+            return MessageType.HandShake;
+        }
+
+        public byte[] Serialize()
+        {
+            List<byte> outData = new List<byte>();
+
+            outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+            outData.AddRange(BitConverter.GetBytes(data.Length));
+
+            foreach (var item in data)
+            {
+                outData.AddRange(BitConverter.GetBytes(item.ID));
+
+                byte[] nameBytes = Encoding.UTF8.GetBytes(item.name);
+                outData.AddRange(BitConverter.GetBytes(nameBytes.Length));
+                outData.AddRange(nameBytes);
+
+                outData.AddRange(BitConverter.GetBytes(item.pos.x));
+                outData.AddRange(BitConverter.GetBytes(item.pos.y));
+                outData.AddRange(BitConverter.GetBytes(item.pos.z));
+            }
+
+            return outData.ToArray();
+        }
     }
 
-    public int Deserialize(byte[] message)
+    public class NetRejectClient : IMessage<int>
     {
-        byte[] messageWithoutHeader = new byte[message.Length - 4];
-        Array.Copy(message, 4, messageWithoutHeader, 0, message.Length - 4);
-        return BitConverter.ToInt32(messageWithoutHeader);
+        public int data;
+
+        public MessageType GetMessageType()
+        {
+            return MessageType.Rejected;
+        }
+
+        public int Deserialize(byte[] message)
+        {
+            byte[] messageWithoutHeader = new byte[message.Length - 4];
+            Array.Copy(message, 4, messageWithoutHeader, 0, message.Length - 4);
+            return BitConverter.ToInt32(messageWithoutHeader);
+        }
+
+        public byte[] Serialize()
+        {
+            List<byte> outData = new List<byte>();
+            outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
+            outData.AddRange(BitConverter.GetBytes(data));
+            return outData.ToArray();
+        }
     }
 
-    public byte[] Serialize()
-    {
-        List<byte> outData = new List<byte>();
-        outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
-        outData.AddRange(BitConverter.GetBytes(data));
-        return outData.ToArray();
-    }
-}
-
-public class NetVector3 : IMessage<(Vector3 pos, int id)>
+    public class NetVector3 : IMessage<(Vector3 pos, int id)>
     {
         private static ulong lastMsgID = 0;
         public (Vector3 pos, int id) data;
@@ -228,7 +259,7 @@ public class NetVector3 : IMessage<(Vector3 pos, int id)>
 
         public (Vector3 pos, Vector3 dir, int id) Deserialize(byte[] message)
         {
-            int offset = 4; 
+            int offset = 4;
 
             // pos
             float x = BitConverter.ToSingle(message, offset);
@@ -318,6 +349,7 @@ public class NetVector3 : IMessage<(Vector3 pos, int id)>
             return outData.ToArray();
         }
     }
+
     public class NetCountdownStarted : IMessage<int>
     {
         public int data;

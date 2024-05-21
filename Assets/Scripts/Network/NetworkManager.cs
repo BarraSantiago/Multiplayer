@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -45,6 +46,7 @@ namespace Network
         public Action<byte[], IPEndPoint> OnReceiveEvent;
         public Action<GameObject> OnPlayerSpawned;
         public Action<string> OnRejected;
+        public Action<string> OnWinner;
         public Action OnGameStart;
         public Action OnCountdownStart;
 
@@ -95,8 +97,16 @@ namespace Network
 
             CheckPings();
 
-            if(gameStarted) return;
-            
+            if (gameStarted)
+            {
+                if (Players.Count == 1)
+                {
+                    EndGame();
+                }
+
+                return;
+            }
+
             if (!countdownStarted ||
                 !((DateTime.UtcNow - countdownStartTime).TotalMinutes >= (countdownSeconds / 60))) return;
             gameStarted = true;
@@ -143,9 +153,9 @@ namespace Network
         public void OnReceiveData(byte[] dataWithChecksum, IPEndPoint ip)
         {
             byte[] data = CheckCorrupted(dataWithChecksum);
-            
-            if(data == null) return;
-            
+
+            if (data == null) return;
+
             MessageType messageType = CheckMessageType(data);
 
             switch (messageType)
@@ -174,6 +184,7 @@ namespace Network
                     if (IsServer)
                     {
                         RemoveClient(ip);
+                        HandleHandshake(null, null);
                     }
                     else
                     {
@@ -193,9 +204,17 @@ namespace Network
                 case MessageType.CountdownStarted:
                     OnCountdownStart?.Invoke();
                     break;
+                
                 case MessageType.GameStarted:
                     OnGameStart?.Invoke();
                     break;
+                
+                case MessageType.Winner:
+                    NetWinner netWinner = new NetWinner();
+                    string winnerName = netWinner.Deserialize(data);
+                    OnWinner?.Invoke("Winner is " + winnerName);
+                    break;
+                
                 default:
                     throw new ArgumentOutOfRangeException();
             }
@@ -211,7 +230,7 @@ namespace Network
                 case ErrorType.None:
                     break;
                 case ErrorType.NameInUse:
-                    Reject("Name is already in use. Please choose a new one.");
+                    Reject("Name is already in use or is empty. Select a new one.");
                     break;
                 case ErrorType.ServerFull:
                     Reject("Server is full.");
@@ -233,7 +252,7 @@ namespace Network
             int calculatedChecksum = CalculateChecksum(data);
 
             if (receivedChecksum == calculatedChecksum) return data;
-            
+
             Debug.LogError("Data is corrupted");
             return null;
         }
@@ -275,10 +294,9 @@ namespace Network
 
                 Player player = _handshake.ServerRecieveHandshake(data, ip);
 
-                if(!player) return;
-                
-                Players.Add(IPToId[ip], player);
-                
+
+                if (player) Players.Add(IPToId[ip], player);
+
                 (int ID, string name, Vector3 pos)[] players = new (int ID, string name, Vector3 pos)[Players.Count];
 
                 int i = 0;
@@ -290,9 +308,9 @@ namespace Network
                 netServerToClientHs.data = players;
 
                 Broadcast(netServerToClientHs.Serialize());
-                
-                if(Players.Count < 2 || countdownStarted) return;
-                
+
+                if (Players.Count < 2 || countdownStarted) return;
+
                 countdownStarted = true;
                 OnCountdownStart?.Invoke();
                 countdownStartTime = DateTime.UtcNow;
@@ -300,7 +318,21 @@ namespace Network
             }
             else
             {
-                Players = _handshake.ClientRecieveHandshake(data);
+                Dictionary<int, Player> newPlayers = _handshake.ClientRecieveHandshake(data);
+
+                foreach (var player in Players.Where(player => newPlayers.Any(player2 => player2.Key == player.Key)))
+                {
+                    Players.Remove(newPlayers.First(player2 => player2.Key == player.Key).Key);
+                }
+
+                Dictionary<int, Player> playersToRemove = Players;
+
+                foreach (var player in playersToRemove)
+                {
+                    RemovePlayer(player.Key);
+                }
+
+                Players = newPlayers;
             }
         }
 
@@ -310,10 +342,16 @@ namespace Network
             if (!IPToId.TryGetValue(ip, out var id)) return;
 
             Connection.Send(BitConverter.GetBytes((int)MessageType.Close), ip);
-            if(Players[IPToId[ip]] && Players[IPToId[ip]].gameObject) Destroy(Players[IPToId[ip]].gameObject);
+            if (Players[IPToId[ip]] && Players[IPToId[ip]].gameObject) Destroy(Players[IPToId[ip]].gameObject);
             Clients.Remove(id);
             Players.Remove(IPToId[ip]);
             IPToId.Remove(ip);
+        }
+
+        private void RemovePlayer(int id)
+        {
+            if (Players[id] && Players[id].gameObject) Destroy(Players[id].gameObject);
+            Players.Remove(id);
         }
 
         private void SendPing()
@@ -416,6 +454,7 @@ namespace Network
         public void CheckDisconnect()
         {
             SendToServer(BitConverter.GetBytes((int)MessageType.Close));
+            Disconnect();
         }
 
         public void Disconnect()
@@ -430,16 +469,45 @@ namespace Network
 
         public void EndGame()
         {
-            foreach (var client in Clients.Values)
+            Player player = Players.Values.First();
+            string winnerName = player.name;
+            if (Players.Count > 0)
             {
-                RemoveClient(client.ipEndPoint);
+                foreach (var player2 in Players.Values.Where(player2 => player2.hp > player.hp))
+                {
+                    winnerName = player2.name;
+                }
+
+                NetWinner netWinner = new NetWinner();
+                netWinner.data = player.name;
+                Broadcast(netWinner.Serialize());
             }
-            
+
+            if (winnerName != null) OnWinner?.Invoke("Winner is " + winnerName);
+
+            StartCoroutine(CloseServer());
+
 #if UNITY_EDITOR
             EditorApplication.isPlaying = false;
-#else
-        Application.Quit();
 #endif
+        }
+
+        private IEnumerator CloseServer()
+        {
+            yield return new WaitForSeconds(timeOut);
+
+            List<IPEndPoint> clientsToRemove = new List<IPEndPoint>();
+
+            foreach (var client in Clients.Values)
+            {
+                clientsToRemove.Add(client.ipEndPoint);
+            }
+
+            foreach (var client in clientsToRemove)
+            {
+                RemoveClient(client);
+            }
+            Disconnect();
         }
     }
 }
