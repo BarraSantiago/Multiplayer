@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
+using Utils;
 
 namespace Network
 {
@@ -96,17 +97,17 @@ namespace Network
         }
     }
 
-    public class NetServerToClientHs : IMessage<(int ID, string name, Vector3 pos)[]>
+    public class NetServerToClientHs : IMessage<(int ID, string name, Vec3 pos)[]>
     {
-        public (int ID, string name, Vector3 pos)[] data;
+        public (int ID, string name, Vec3 pos)[] data;
 
-        public (int ID, string name, Vector3 pos)[] Deserialize(byte[] message)
+        public (int ID, string name, Vec3 pos)[] Deserialize(byte[] message)
         {
             int offset = 4; // Skip the message type
             int count = BitConverter.ToInt32(message, offset);
             offset += sizeof(int);
 
-            var result = new (int ID, string name, Vector3 pos)[count];
+            var result = new (int ID, string name, Vec3 pos)[count];
 
             for (int i = 0; i < count; i++)
             {
@@ -128,7 +129,7 @@ namespace Network
                 float z = BitConverter.ToSingle(message, offset);
                 offset += sizeof(float);
 
-                result[i] = (id, name, new Vector3(x, y, z));
+                result[i] = (id, name, new Vec3(x, y, z));
             }
 
             return result;
@@ -188,22 +189,22 @@ namespace Network
         }
     }
 
-    public class NetVector3 : IMessage<(Vector3 pos, int id)>
+    public class NetVec3 : IMessage<(Vec3 pos, int id)>
     {
         private static ulong lastMsgID = 0;
-        public (Vector3 pos, int id) data;
+        public (Vec3 pos, int id) data;
 
-        public NetVector3(Vector3 pos, int id)
+        public NetVec3(Vec3 pos, int id)
         {
             data = (pos, id);
         }
 
-        public NetVector3(byte[] data)
+        public NetVec3(byte[] data)
         {
             this.data = Deserialize(data);
         }
 
-        public (Vector3 pos, int id) Deserialize(byte[] message)
+        public (Vec3 pos, int id) Deserialize(byte[] message)
         {
             int offset = 4;
 
@@ -214,7 +215,7 @@ namespace Network
             offset += sizeof(float);
             float z = BitConverter.ToSingle(message, offset);
             offset += sizeof(float);
-            Vector3 pos = new Vector3(x, y, z);
+            Vec3 pos = new Vec3(x, y, z);
 
             // id
             int id = BitConverter.ToInt32(message, offset);
@@ -243,11 +244,11 @@ namespace Network
         }
     }
 
-    public class NetShoot : IMessage<(Vector3 pos, Vector3 dir, int id)>
+    public class NetShoot : IMessage<(Vec3 pos, Vec3 dir, int id)>
     {
-        public (Vector3 pos, Vector3 dir, int id) data;
+        public (Vec3 pos, Vec3 dir, int id) data;
 
-        public NetShoot(Vector3 pos, Vector3 dir, int id)
+        public NetShoot(Vec3 pos, Vec3 dir, int id)
         {
             data = (pos, dir, id);
         }
@@ -257,7 +258,7 @@ namespace Network
             this.data = Deserialize(data);
         }
 
-        public (Vector3 pos, Vector3 dir, int id) Deserialize(byte[] message)
+        public (Vec3 pos, Vec3 dir, int id) Deserialize(byte[] message)
         {
             int offset = 4;
 
@@ -268,7 +269,7 @@ namespace Network
             offset += sizeof(float);
             float z = BitConverter.ToSingle(message, offset);
             offset += sizeof(float);
-            Vector3 pos = new Vector3(x, y, z);
+            Vec3 pos = new Vec3(x, y, z);
 
             // dir
             x = BitConverter.ToSingle(message, offset);
@@ -277,7 +278,7 @@ namespace Network
             offset += sizeof(float);
             z = BitConverter.ToSingle(message, offset);
             offset += sizeof(float);
-            Vector3 dir = new Vector3(x, y, z);
+            Vec3 dir = new Vec3(x, y, z);
 
             // id
             int id = BitConverter.ToInt32(message, offset);
@@ -341,10 +342,7 @@ namespace Network
 
             outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
 
-            foreach (char letter in data)
-            {
-                outData.Add((byte)letter);
-            }
+            outData.AddRange(data.Select(letter => (byte)letter));
 
             return outData.ToArray();
         }
