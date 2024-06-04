@@ -9,73 +9,84 @@ namespace Network
 {
     public class Client
     {
-        public DateTime timeStamp;
+        public static Action<> OnFireBullet;
+        public Action<string> OnRejected;
         public int id;
+        public int timeOut = 10;
         public IPEndPoint ipEndPoint;
+        public double MS { get; private set; } = 0;
+
+        public DateTime timeStamp;
+        private Handshake _handshake;
 
         public Client(IPEndPoint ipEndPoint, int id, DateTime timeStamp)
         {
-            this.timeStamp = timeStamp;
             this.id = id;
             this.ipEndPoint = ipEndPoint;
+            this.timeStamp = timeStamp;
+
+            SendToServer(_handshake.PrepareHandshake(name));
+            SendPing();
+            NetworkManager.OnClose += Disconnect;
         }
 
+        
+        
         private void SendPing()
         {
-            TimeSpan newDateTime = DateTime.UtcNow - _time;
+            TimeSpan newDateTime = DateTime.UtcNow - timeStamp;
             MS = (float)newDateTime.Milliseconds;
 
-            _time = DateTime.UtcNow;
+            timeStamp = DateTime.UtcNow;
 
             SendToServer(BitConverter.GetBytes((int)MessageType.Pong));
         }
 
         public void MovePlayer(Vec3 pos)
         {
-            NetVector3 netVector3 = new NetVector3(pos, NetworkManager.Instance.thisPlayer.clientID);
+            NetVec3 netVector3 = new NetVec3(pos, id);
             SendToServer(netVector3.Serialize());
         }
 
         public void FireBullet(Vec3 pos, Vec3 dire)
         {
-            NetShoot netVector3 = new NetShoot(pos.ToVector3(), dire.ToVector3(),
-                NetworkManager.Instance.thisPlayer.clientID);
+            NetShoot netVector3 = new NetShoot(pos, dire, id);
             SendToServer(netVector3.Serialize());
         }
 
         private void MovePlayers(byte[] data, IPEndPoint ip)
         {
-            NetVector3 netVector3 = new NetVector3(data);
+            NetVec3 netVector3 = new NetVec3(data);
             (Vec3 pos, int id) newData = netVector3.data;
 
-            if (newData.id == NetworkManager.Instance.thisPlayer.clientID) return;
+            if (newData.id == id) return;
 
             Players[newData.id].gameObject.transform.position = newData.pos;
         }
 
         public void SendToServer(byte[] data)
         {
-            NetworkManager.Instance.Connection.Send(data);
+            NetworkManager.Connection.Send(data);
         }
 
         public void CheckPing()
         {
-            DateTime timeOutTime = _time.AddSeconds(timeOut);
+            DateTime timeOutTime = timeStamp.AddSeconds(timeOut);
             if (timeOutTime < DateTime.UtcNow)
             {
                 CheckDisconnect();
             }
         }
 
-        public void Disconnect()
+        public void Disconnect(IPEndPoint ip)
         {
-            NetworkManager.Instance.Connection.Close();
+            NetworkManager.Connection.Close();
         }
 
         public void CheckDisconnect()
         {
             SendToServer(BitConverter.GetBytes((int)MessageType.Close));
-            Disconnect();
+            Disconnect(null);
         }
 
         public void HandleHandshake(Byte[] data)
@@ -121,9 +132,7 @@ namespace Network
         {
             NetShoot netShoot = new NetShoot(data);
             (Vec3 pos, Vec3 target, int id) newData = netShoot.data;
-
-            if (newData.id == thisPlayer.clientID) return;
-
+            
             Bullet bullet = Instantiate(bulletPrefab, newData.pos, Quaternion.identity).AddComponent<Bullet>();
             bullet.SetTarget(newData.target);
             bullet.clientID = newData.id;

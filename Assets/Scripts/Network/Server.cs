@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -11,18 +10,30 @@ namespace Network
 {
     public class Server
     {
+        [SerializeField] public double countdownSeconds = 10;
+
+        public Action<string> OnWinner;
         public readonly Dictionary<IPEndPoint, int> IPToId = new Dictionary<IPEndPoint, int>();
         public readonly Dictionary<int, Client> Clients = new Dictionary<int, Client>();
         public Dictionary<int, Player> Players = new Dictionary<int, Player>();
         public int timeOut = 10;
         private Handshake _handshake;
-
+        private bool countdownStarted;
+        private DateTime countdownStartTime;
+        public void Initialize()
+        {
+            NetworkManager.OnClose += RemoveClient;
+            NetworkManager.OnHandshake += HandleHandshake;
+            NetworkManager.OnMovePlayers += MovePlayers;
+            NetworkManager.OnBulletFired += HandleBullets;
+            
+        }
+        
         private void RemoveClient(IPEndPoint ip)
         {
             if (!IPToId.TryGetValue(ip, out var id)) return;
 
-            NetworkManager.Instance.Connection.Send(BitConverter.GetBytes((int)MessageType.Close), ip);
-            if (Players[IPToId[ip]] && Players[IPToId[ip]].gameObject) Destroy(Players[IPToId[ip]].gameObject);
+            NetworkManager.Connection.Send(BitConverter.GetBytes((int)MessageType.Close), ip);
             Clients.Remove(id);
             Players.Remove(IPToId[ip]);
             IPToId.Remove(ip);
@@ -35,24 +46,20 @@ namespace Network
 
             while (iterator.MoveNext())
             {
-                NetworkManager.Instance.Connection.Send(data, iterator.Current.Value.ipEndPoint);
+                NetworkManager.Connection.Send(data, iterator.Current.Value.ipEndPoint);
             }
         }
 
         private void CheckPings()
         {
-            if (NetworkManager.Instance.Connection == null) return;
+            if (NetworkManager.Connection == null) return;
 
 
             bool clientRemoved = false;
             List<IPEndPoint> clientsToRemove = new List<IPEndPoint>();
 
-            foreach (var client in Clients.Values)
+            foreach (var client in from client in Clients.Values let timeOutTime = client.timeStamp where timeOutTime.AddSeconds(timeOut) <= DateTime.UtcNow || Players[client.id].hp <= 0 select client)
             {
-                DateTime timeOutTime = client.timeStamp;
-
-                if (timeOutTime.AddSeconds(timeOut) > DateTime.UtcNow && Players[client.id].hp > 0) continue;
-
                 clientsToRemove.Add(client.ipEndPoint);
                 clientRemoved = true;
             }
@@ -71,7 +78,7 @@ namespace Network
 
         public void MovePlayers(byte[] data, IPEndPoint ip)
         {
-            NetVector3 netVector3 = new NetVector3(data);
+            NetVec3 netVector3 = new NetVec3(data);
             (Vec3 pos, int id) newData = netVector3.data;
 
 
@@ -93,7 +100,7 @@ namespace Network
 
             Clients[IPToId[ip]] = client;
 
-            NetworkManager.Instance.Connection.Send(BitConverter.GetBytes((int)MessageType.Ping), ip);
+            NetworkManager.Connection.Send(BitConverter.GetBytes((int)MessageType.Ping), ip);
         }
 
         public void EndGame()
@@ -114,7 +121,7 @@ namespace Network
 
             if (winnerName != null) OnWinner?.Invoke("Winner is " + winnerName);
 
-            StartCoroutine(CloseServer());
+            CloseServer();
         }
 
         private void HandleHandshake(byte[] data, IPEndPoint ip)
@@ -142,7 +149,7 @@ namespace Network
             if (Players.Count < 2 || countdownStarted) return;
 
             countdownStarted = true;
-            OnCountdownStart?.Invoke();
+            NetworkManager.OnCountdownStart?.Invoke();
             countdownStartTime = DateTime.UtcNow;
             Broadcast(BitConverter.GetBytes((int)MessageType.CountdownStarted));
         }
@@ -150,24 +157,15 @@ namespace Network
         private void HandleBullets(byte[] data)
         {
             NetShoot netShoot = new NetShoot(data);
-            (Vec3 pos, Vec3 target, int id) newData = netShoot.data;
-
-            Bullet bullet = Instantiate(bulletPrefab, newData.pos, Quaternion.identity).AddComponent<Bullet>();
-            bullet.SetTarget(newData.target);
-            bullet.clientID = newData.id;
+            
+            // TODO add id to the bullet
+            
             Broadcast(data);
         }
 
-        private IEnumerator CloseServer()
+        private void CloseServer()
         {
-            yield return new WaitForSeconds(timeOut);
-
-            List<IPEndPoint> clientsToRemove = new List<IPEndPoint>();
-
-            foreach (var client in Clients.Values)
-            {
-                clientsToRemove.Add(client.ipEndPoint);
-            }
+            List<IPEndPoint> clientsToRemove = Clients.Values.Select(client => client.ipEndPoint).ToList();
 
             foreach (var client in clientsToRemove)
             {
@@ -176,16 +174,22 @@ namespace Network
 
             Disconnect();
         }
+        
+        private void StartGame()
+        {
+            if (!countdownStarted ||
+                !((DateTime.UtcNow - countdownStartTime).TotalMinutes >= (countdownSeconds / 60))) return;
+            Broadcast(BitConverter.GetBytes((int)MessageType.GameStarted));
+        }
 
         private void RemovePlayer(int id)
         {
-            if (Players[id] && Players[id].gameObject) Destroy(Players[id].gameObject);
             Players.Remove(id);
         }
 
         public void Disconnect()
         {
-            NetworkManager.Instance.Connection.Close();
+            NetworkManager.Connection.Close();
             Application.Quit();
         }
     }

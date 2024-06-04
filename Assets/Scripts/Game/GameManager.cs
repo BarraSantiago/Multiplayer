@@ -10,7 +10,9 @@ namespace Game
 {
     public class GameManager : MonoBehaviour
     {
-        [FormerlySerializedAs("text")] [SerializeField] private TMP_Text countdown;
+        [FormerlySerializedAs("text")] [SerializeField]
+        private TMP_Text countdown;
+
         [SerializeField] private InputActionAsset inputMap;
         [SerializeField] private GameObject configMenu;
         [SerializeField] private GameObject bulletPrefab;
@@ -23,13 +25,12 @@ namespace Game
 
         private void Awake()
         {
-            NetworkManager.Instance.OnPlayerSpawned += InitializePlayer;
-            NetworkManager.Instance.OnRejected += OnRejected;
-            quit.onClick.AddListener(NetworkManager.Instance.CheckDisconnect);
-            resume.onClick.AddListener(NetworkManager.Instance.CheckDisconnect);
-            NetworkManager.Instance.OnGameStart += OnGameStarted;
-            NetworkManager.Instance.OnCountdownStart += OnCountdownStarted;
-            NetworkManager.Instance.OnWinner += OnWinner;
+            NetworkManager.OnPlayerSpawned += InitializePlayer;
+            NetworkManager.OnRejected += OnRejected;
+            quit.onClick.AddListener(NetworkManager.CheckDisconnect);
+            NetworkManager.OnGameStart += OnGameStarted;
+            NetworkManager.OnCountdownStart += OnCountdownStarted;
+            NetworkManager.OnWinner += OnWinner;
         }
 
         private void OnWinner(string obj)
@@ -59,7 +60,7 @@ namespace Game
 
         private void OnRejected(string message)
         {
-            NetworkManager.Instance.OnPlayerSpawned += InitializePlayer;
+            NetworkManager.OnPlayerSpawned += InitializePlayer;
         }
 
         private void InitializePlayer(GameObject obj)
@@ -70,20 +71,18 @@ namespace Game
             controller.bulletPrefab = bulletPrefab;
             controller.configMenu = configMenu;
 
-            NetworkManager.Instance.OnPlayerSpawned -= InitializePlayer;
+            NetworkManager.OnPlayerSpawned -= InitializePlayer;
         }
 
         private void OnGameStarted()
         {
-            if (!NetworkManager.Instance.IsServer)
-            {
-                PlayerInput input = _player.AddComponent<PlayerInput>();
-                input.actions = inputMap;
-                input.actions.FindActionMap("Player").Enable();
-                input.notificationBehavior = PlayerNotifications.SendMessages;
+            PlayerInput input = _player.AddComponent<PlayerInput>();
+            input.actions = inputMap;
+            input.actions.FindActionMap("Player").Enable();
+            input.notificationBehavior = PlayerNotifications.SendMessages;
 
-                input.actions.Enable();
-            }
+            input.actions.Enable();
+
 
             StartCoroutine(GameCountdown());
         }

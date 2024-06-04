@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using Game;
 using UnityEngine;
@@ -67,7 +66,7 @@ namespace Network
         {
             NetServerToClientHs netServerToClientHs = new NetServerToClientHs();
 
-            (int ID, string name, Vector3 pos)[] newPlayers = netServerToClientHs.Deserialize(data);
+            (int ID, string name, Vec3 pos)[] newPlayers = netServerToClientHs.Deserialize(data);
 
             Dictionary<int, Player> playersList = new Dictionary<int, Player>();
 
@@ -80,7 +79,7 @@ namespace Network
                 {
                     
                     NetworkManager.Instance.thisPlayer.clientID = newPlayers[i].ID;
-                    NetworkManager.Instance.thisPlayer.gameObject.transform.position = newPlayers[i].pos;
+                    NetworkManager.Instance.thisPlayer.gameObject.transform.position = newPlayers[i].pos.ToVector3();
                     
                     continue;
                 }
@@ -89,7 +88,7 @@ namespace Network
                 
                 GameObject body = Instantiate(bodyPrefab, Vector3.one * newPlayers[i].ID, Quaternion.identity);
                 
-                body.transform.position = newPlayers[i].pos;
+                body.transform.position = newPlayers[i].pos.ToVector3();
                 
                 Player player = body.AddComponent<Player>();
                 
