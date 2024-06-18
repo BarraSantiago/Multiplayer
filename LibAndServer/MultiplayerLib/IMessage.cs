@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Numerics;
 using System.Text;
-using UnityEngine;
 
 namespace Network
 {
@@ -12,10 +9,9 @@ namespace Network
         Console,
         Position,
         Ping,
-        Pong,
         Close,
         Shoot,
-        Rejected,
+        Rejected, 
         CountdownStarted,
         GameStarted,
         Winner
@@ -154,9 +150,9 @@ namespace Network
                 outData.AddRange(BitConverter.GetBytes(nameBytes.Length));
                 outData.AddRange(nameBytes);
 
-                outData.AddRange(BitConverter.GetBytes(item.pos.x));
-                outData.AddRange(BitConverter.GetBytes(item.pos.y));
-                outData.AddRange(BitConverter.GetBytes(item.pos.z));
+                outData.AddRange(BitConverter.GetBytes(item.pos.X));
+                outData.AddRange(BitConverter.GetBytes(item.pos.Y));
+                outData.AddRange(BitConverter.GetBytes(item.pos.Z));
             }
 
             return outData.ToArray();
@@ -233,9 +229,9 @@ namespace Network
 
             outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
 
-            outData.AddRange(BitConverter.GetBytes(data.pos.x));
-            outData.AddRange(BitConverter.GetBytes(data.pos.y));
-            outData.AddRange(BitConverter.GetBytes(data.pos.z));
+            outData.AddRange(BitConverter.GetBytes(data.pos.X));
+            outData.AddRange(BitConverter.GetBytes(data.pos.Y));
+            outData.AddRange(BitConverter.GetBytes(data.pos.Z));
 
             outData.AddRange(BitConverter.GetBytes(data.id));
 
@@ -296,13 +292,13 @@ namespace Network
 
             outData.AddRange(BitConverter.GetBytes((int)GetMessageType()));
 
-            outData.AddRange(BitConverter.GetBytes(data.pos.x));
-            outData.AddRange(BitConverter.GetBytes(data.pos.y));
-            outData.AddRange(BitConverter.GetBytes(data.pos.z));
+            outData.AddRange(BitConverter.GetBytes(data.pos.X));
+            outData.AddRange(BitConverter.GetBytes(data.pos.Y));
+            outData.AddRange(BitConverter.GetBytes(data.pos.Z));
 
-            outData.AddRange(BitConverter.GetBytes(data.dir.x));
-            outData.AddRange(BitConverter.GetBytes(data.dir.y));
-            outData.AddRange(BitConverter.GetBytes(data.dir.z));
+            outData.AddRange(BitConverter.GetBytes(data.dir.X));
+            outData.AddRange(BitConverter.GetBytes(data.dir.Y));
+            outData.AddRange(BitConverter.GetBytes(data.dir.Z));
 
             outData.AddRange(BitConverter.GetBytes(data.id));
 
