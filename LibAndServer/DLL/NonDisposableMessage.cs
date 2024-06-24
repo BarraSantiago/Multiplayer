@@ -1,6 +1,6 @@
-﻿namespace MultiplayerLib;
+﻿namespace DLL;
 
-public class ImportantMessage
+public class NonDisposableMessage
 {
     public byte[] Message { get; set; }
     public bool ConfirmationReceived { get; set; }

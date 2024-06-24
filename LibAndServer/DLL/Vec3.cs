@@ -1,6 +1,6 @@
 ﻿using System.Numerics;
 
-namespace MultiplayerLib
+namespace DLL
 {
     [Serializable]
     public struct Vec3

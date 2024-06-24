@@ -1,15 +1,14 @@
 ﻿using System.Net;
-using System.Numerics;
 
-namespace MultiplayerLib
+namespace DLL
 {
     public class Handshake
     {
+        public readonly Dictionary<IPEndPoint, int> IPToId = new Dictionary<IPEndPoint, int>();
+        public Dictionary<int, Player> Players = new Dictionary<int, Player>();
         private int _clientId = 0;
         private int _maxPlayers = 2;
         private int _playersCount = 0;
-        public readonly Dictionary<IPEndPoint, int> IPToId = new Dictionary<IPEndPoint, int>();
-        public Dictionary<int, Player> Players = new Dictionary<int, Player>();
         private void AddClient(IPEndPoint ip)
         {
             if (IPToId.ContainsKey(ip)) return;
@@ -22,15 +21,15 @@ namespace MultiplayerLib
             _clientId++;
         }
 
-        public string ServerRecieveHandshake(byte[] data, IPEndPoint ip, UdpConnection Connection)
+        public int ServerReceiveHandshake(byte[] data, IPEndPoint ip, UdpConnection connection)
         {
-            if (ip == null || data == null) return null;
+            if (ip == null || data == null) return -1;
             if (_playersCount >= _maxPlayers)
             {
                 // Name is already used, reject the connection
                 NetRejectClient rejectClientMessage = new NetRejectClient { data = (int)ErrorType.ServerFull };
-                Connection.Send(rejectClientMessage.Serialize(), ip);
-                return null;
+                connection.Send(rejectClientMessage.Serialize(), ip);
+                return -1;
             }
 
             NetClientToServerHs netClientToServerHs = new NetClientToServerHs();
@@ -40,19 +39,17 @@ namespace MultiplayerLib
             {
                 // Name is already used, reject the connection
                 NetRejectClient rejectClientMessage = new NetRejectClient { data = (int)ErrorType.NameInUse };
-                Connection.Send(rejectClientMessage.Serialize(), ip);
-                return null;
+                connection.Send(rejectClientMessage.Serialize(), ip);
+                return -1;
             }
-
+            
+            Players.Add(_clientId, new Player { name = newName, clientID = _clientId, pos = new Vec3(0, 0, 0) });
             AddClient(ip);
-
-            Vec3 pos = Vec3.FromVector3(Vector3.UnitY * IPToId[ip]);
-
-
-            return newName;
+            
+            return IPToId[ip];
         }
 
-        public Dictionary<int, Player> ClientRecieveHandshake(byte[] data, Player thisPlayer)
+        public Dictionary<int, Player> ClientReceiveHandshake(byte[] data, Player thisPlayer)
         {
             NetServerToClientHs netServerToClientHs = new NetServerToClientHs();
 

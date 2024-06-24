@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace MultiplayerLib
+namespace DLL
 {
     public enum MessageType
     {

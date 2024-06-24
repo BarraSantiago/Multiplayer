@@ -1,21 +1,29 @@
 ﻿using System.Net;
 
-namespace MultiplayerLib
+namespace DLL
 {
+    public struct Client(IPEndPoint ipEndPoint, int id, DateTime timeStamp)
+    {
+        public DateTime timeStamp = timeStamp;
+        public int id = id;
+        public IPEndPoint ipEndPoint = ipEndPoint;
+    }
+
     public abstract class NetworkManager : IReceiveData
     {
-        public IPAddress IPAddress { get; private set; }
-        public int Port { get; private set; }
+        public readonly Dictionary<int, Client> Clients = new Dictionary<int, Client>();
+        public IPAddress IPAddress { get; protected set; }
+        public int Port { get; protected set; }
+        public UdpConnection Connection;
+        public Handshake _handshake;
         
-        private Handshake _handshake;
-        public static UdpConnection Connection;
 
-        private void RecieveData()
+        protected void ReceiveData()
         {
             Connection?.FlushReceiveData();
         }
 
-        private MessageType CheckMessageType(byte[] data)
+        protected MessageType CheckMessageType(byte[] data)
         {
             return (MessageType)BitConverter.ToInt32(data);
         }
@@ -36,7 +44,7 @@ namespace MultiplayerLib
             switch (messageType)
             {
                 case MessageType.HandShake:
-                    ReceiveHandshake(data);
+                    ReceiveHandshake(data, ip);
                     break;
 
                 case MessageType.Console: 
@@ -44,7 +52,7 @@ namespace MultiplayerLib
                     break;
 
                 case MessageType.Position:
-                    ReceivePosition(data);
+                    ReceivePosition(data, ip);
                     break;
 
                 case MessageType.Ping:
@@ -52,7 +60,7 @@ namespace MultiplayerLib
                     break;
 
                 case MessageType.Close:
-                    Close();
+                    Close(ip);
                     break;
 
                 case MessageType.Shoot:
@@ -87,15 +95,15 @@ namespace MultiplayerLib
 
         protected abstract void ShootBullet(byte[] data);
 
-        protected abstract void Close();
+        protected abstract void Close(IPEndPoint ip);
 
         protected abstract void SendPing();
 
-        protected abstract void ReceivePosition(byte[] data);
+        protected abstract void ReceivePosition(byte[] data, IPEndPoint ip);
 
         protected abstract void ReceiveConsole(byte[] data);
 
-        protected abstract void ReceiveHandshake(byte[] data);
+        protected abstract void ReceiveHandshake(byte[] data, IPEndPoint ip);
         
         private byte[] CheckCorrupted(byte[] dataWithChecksum)
         {

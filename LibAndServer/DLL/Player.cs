@@ -1,4 +1,4 @@
-﻿namespace MultiplayerLib
+﻿namespace DLL
 {
     [Serializable]
     public class Player
