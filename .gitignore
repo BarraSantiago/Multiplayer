@@ -70,3 +70,13 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+LibAndServer/MultiplayerLib/bin/Debug/net7.0/MultiplayerLib.deps.json
+LibAndServer/MultiplayerLib/bin/Debug/net7.0/MultiplayerLib.dll
+LibAndServer/MultiplayerLib/obj/Debug/net7.0/MultiplayerLib.csproj.CoreCompileInputs.cache
+LibAndServer/MultiplayerLib/obj/Debug/net7.0/MultiplayerLib.csproj.FileListAbsolute.txt
+LibAndServer/MultiplayerLib/obj/Debug/net7.0/MultiplayerLib.dll
+LibAndServer/MultiplayerLib/obj/Debug/net7.0/ref/MultiplayerLib.dll
+LibAndServer/MultiplayerLib/obj/Debug/net7.0/refint/MultiplayerLib.dll
+LibAndServer/MultiplayerLib/obj/rider.project.model.nuget.info
+LibAndServer/Server/obj/Debug/net7.0/Server.csproj.CoreCompileInputs.cache
+LibAndServer/Server/obj/Debug/net7.0/Server.csproj.FileListAbsolute.txt
