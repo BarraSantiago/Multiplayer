@@ -6,7 +6,7 @@ namespace MultiplayerLib
     public class Handshake
     {
         private int _clientId = 0;
-        private int _maxPlayers = 4;
+        private int _maxPlayers = 2;
         private int _playersCount = 0;
         public readonly Dictionary<IPEndPoint, int> IPToId = new Dictionary<IPEndPoint, int>();
         public Dictionary<int, Player> Players = new Dictionary<int, Player>();
