@@ -1,6 +1,9 @@
 using System.Net;
 
-public interface IReceiveData
+namespace MultiplayerLib
 {
-    void OnReceiveData(byte[] data, IPEndPoint ipEndpoint);
+    public interface IReceiveData
+    {
+        void OnReceiveData(byte[] data, IPEndPoint ipEndpoint);
+    }
 }

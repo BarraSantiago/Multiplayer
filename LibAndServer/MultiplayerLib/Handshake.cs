@@ -1,62 +1,58 @@
 ﻿using System.Net;
+using System.Numerics;
 
-namespace Network
+namespace MultiplayerLib
 {
     public class Handshake
     {
         private int _clientId = 0;
-
+        private int _maxPlayers = 4;
+        private int _playersCount = 0;
+        public readonly Dictionary<IPEndPoint, int> IPToId = new Dictionary<IPEndPoint, int>();
+        public Dictionary<int, Player> Players = new Dictionary<int, Player>();
         private void AddClient(IPEndPoint ip)
         {
-            if (NetworkManager.Instance.IPToId.ContainsKey(ip)) return;
+            if (IPToId.ContainsKey(ip)) return;
 
             int id = _clientId;
-            
-            NetworkManager.Instance.IPToId[ip] = _clientId;
 
-            NetworkManager.Instance.Clients.Add(_clientId, new Client(ip, id, DateTime.UtcNow));
+            IPToId[ip] = _clientId;
+
 
             _clientId++;
         }
 
-        public Player ServerRecieveHandshake(byte[] data, IPEndPoint ip)
+        public string ServerRecieveHandshake(byte[] data, IPEndPoint ip, UdpConnection Connection)
         {
             if (ip == null || data == null) return null;
-            if (NetworkManager.Instance.Players.Count >= NetworkManager.Instance.MaxPlayers)
+            if (_playersCount >= _maxPlayers)
             {
-               
-                    // Name is already used, reject the connection
-                    NetRejectClient rejectClientMessage = new NetRejectClient { data = (int)ErrorType.ServerFull };
-                    NetworkManager.Instance.Connection.Send(rejectClientMessage.Serialize(), ip);
-                    return null;
-                
+                // Name is already used, reject the connection
+                NetRejectClient rejectClientMessage = new NetRejectClient { data = (int)ErrorType.ServerFull };
+                Connection.Send(rejectClientMessage.Serialize(), ip);
+                return null;
             }
+
             NetClientToServerHs netClientToServerHs = new NetClientToServerHs();
             string newName = netClientToServerHs.Deserialize(data);
 
-            if (NetworkManager.Instance.Players.Values.Any(player => player.name == newName) || newName == "")
+            if (Players.Values.Any(player => player.name == newName) || newName == "")
             {
                 // Name is already used, reject the connection
                 NetRejectClient rejectClientMessage = new NetRejectClient { data = (int)ErrorType.NameInUse };
-                NetworkManager.Instance.Connection.Send(rejectClientMessage.Serialize(), ip);
+                Connection.Send(rejectClientMessage.Serialize(), ip);
                 return null;
             }
-            
+
             AddClient(ip);
 
-            Vec3 pos = Vec3.FromVector3(Vector3.up * NetworkManager.Instance.IPToId[ip]);
+            Vec3 pos = Vec3.FromVector3(Vector3.UnitY * IPToId[ip]);
 
-            GameObject body = Instantiate(bodyPrefab, pos.ToVector3(), Quaternion.identity);
 
-            Player player = body.AddComponent<Player>();
-
-            player.name = newName;
-            player.gameObject.transform.name = newName;
-            player.clientID = NetworkManager.Instance.IPToId[ip];
-            return player;
+            return newName;
         }
 
-        public Dictionary<int, Player> ClientRecieveHandshake(byte[] data)
+        public Dictionary<int, Player> ClientRecieveHandshake(byte[] data, Player thisPlayer)
         {
             NetServerToClientHs netServerToClientHs = new NetServerToClientHs();
 
@@ -66,42 +62,38 @@ namespace Network
 
             for (int i = 0; i < newPlayers.Length; i++)
             {
-                if (NetworkManager.Instance.Players != null &&
-                    NetworkManager.Instance.Players.Any(player => player.Value.clientID == newPlayers[i].ID)) continue;
-                
-                if (newPlayers[i].name == NetworkManager.Instance.thisPlayer.name && NetworkManager.Instance.thisPlayer.clientID == -1)
+                if (Players != null &&
+                    Players.Any(player => player.Value.clientID == newPlayers[i].ID)) continue;
+
+                if (newPlayers[i].name == thisPlayer.name &&
+                    thisPlayer.clientID == -1)
                 {
-                    
-                    NetworkManager.Instance.thisPlayer.clientID = newPlayers[i].ID;
-                    NetworkManager.Instance.thisPlayer.gameObject.transform.position = newPlayers[i].pos.ToVector3();
-                    
+                    thisPlayer.clientID = newPlayers[i].ID;
+                    thisPlayer.pos = newPlayers[i].pos;
+
                     continue;
                 }
-                
-                if(newPlayers[i].ID == NetworkManager.Instance.thisPlayer.clientID) continue;
-                
-                GameObject body = Instantiate(bodyPrefab, Vector3.one * newPlayers[i].ID, Quaternion.identity);
-                
-                body.transform.position = newPlayers[i].pos.ToVector3();
-                
-                Player player = body.AddComponent<Player>();
-                
+
+                if (newPlayers[i].ID == thisPlayer.clientID) continue;
+
+
+                Player player = new Player();
+
                 player.name = newPlayers[i].name;
                 player.clientID = newPlayers[i].ID;
-                player.gameObject.transform.name = newPlayers[i].name;
-
+                player.pos = newPlayers[i].pos;
+                
                 playersList.Add(newPlayers[i].ID, player);
             }
 
             return playersList;
         }
 
-        public byte[] PrepareHandshake(string _name)
+        public byte[] PrepareHandshake(string name)
         {
             NetClientToServerHs netClientToServerHs = new NetClientToServerHs();
 
-            netClientToServerHs.data = _name;
-            if(!NetworkManager.Instance.IsServer) NetworkManager.Instance.thisPlayer.name = _name;
+            netClientToServerHs.data = name;
 
             return netClientToServerHs.Serialize();
         }

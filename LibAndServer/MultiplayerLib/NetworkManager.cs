@@ -1,7 +1,6 @@
 ﻿using System.Net;
 
-
-namespace Network
+namespace MultiplayerLib
 {
     public abstract class NetworkManager : IReceiveData
     {

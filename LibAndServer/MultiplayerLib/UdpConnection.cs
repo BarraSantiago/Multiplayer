@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Sockets;
 
+namespace MultiplayerLib;
+
 public class UdpConnection
 {
     private struct DataReceived
